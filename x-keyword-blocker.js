@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Twitter / X 关键词屏蔽工具
 // @namespace    https://gist.github.com/livingfree2023/0280fc4517174563b0e5161c10a4ced8
-// @version      1.3.2
-// @description  高效屏蔽包含指定关键词的帖子，支持统计、暂停、TXT 与网址导入导出
+// @version      1.4.0
+// @description  屏蔽指定关键词与推广帖子，支持统计、暂停、TXT 与网址导入导出
 // @author       livingfree
 // @license      MIT
 // @match        https://twitter.com/*
@@ -19,6 +19,7 @@
     const KEYS = {
         keywords: 'twitter_blocked_keywords',
         enabled: 'twitter_blocker_enabled',
+        blockPromoted: 'twitter_blocker_block_promoted',
         filterUserId: 'twitter_blocker_filter_user_id',
         floatingNotice: 'twitter_blocker_floating_notice',
         stats: 'twitter_blocker_stats_v1'
@@ -90,6 +91,11 @@
         userId
     ].filter(Boolean).join('\n');
     const isPromotedLabelText = (value) => PROMOTED_LABELS.has(keyOf(value));
+    const resolveBlockedMatch = (text, keywords, enabled, blockPromoted, promotedLabel) => {
+        if (!enabled) return null;
+        if (blockPromoted && promotedLabel) return promotedLabel;
+        return findBlockedKeyword(text, keywords);
+    };
 
     // Pure helpers are testable without a browser or userscript manager.
     if (typeof process !== 'undefined' && process.versions?.node
@@ -101,7 +107,8 @@
             parseImportText,
             userIdFromHref,
             buildAuthorSearchText,
-            isPromotedLabelText
+            isPromotedLabelText,
+            resolveBlockedMatch
         };
         return;
     }
@@ -122,6 +129,7 @@
     const state = {
         keywords: normalizeKeywords(Array.isArray(storedKeywords) ? storedKeywords : DEFAULTS),
         enabled: read(KEYS.enabled, true) !== false,
+        blockPromoted: read(KEYS.blockPromoted, true) !== false,
         filterUserId: read(KEYS.filterUserId, false) === true,
         floatingNotice: read(KEYS.floatingNotice, true) !== false,
         total: Number.isSafeInteger(stats?.total) && stats.total >= 0 ? stats.total : 0,
@@ -193,14 +201,11 @@
             authorId
         );
     };
-    const tweetPromotedSearchText = (article) => {
+    const tweetPromotedLabel = (article) => {
         for (const span of article.querySelectorAll('span')) {
             if (span.closest('[data-testid="tweetText"], [data-testid="User-Name"]')) continue;
             const label = clean(span.textContent || '');
-            if (isPromotedLabelText(label)) {
-                // Canonical aliases let the default Chinese keywords block ads in any supported locale.
-                return `${label}\n广告\n推广\nad\npromoted\nsponsored`;
-            }
+            if (isPromotedLabelText(label)) return label;
         }
         return '';
     };
@@ -217,16 +222,21 @@
         const text = tweetText(article);
         const authorId = tweetAuthorId(article);
         const authorText = tweetAuthorSearchText(article, authorId);
-        const promotedText = tweetPromotedSearchText(article);
-        const signature = `${state.enabled}|${state.revision}|${postId(article) || ''}|${authorText}|${promotedText}|${text}`;
+        const promotedLabel = tweetPromotedLabel(article);
+        const signature = `${state.enabled}|${state.blockPromoted}|${state.revision}|${postId(article) || ''}|${authorText}|${promotedLabel}|${text}`;
         if (cache.get(article) === signature) return;
         cache.set(article, signature);
         const searchableText = [
             text,
-            promotedText,
             state.filterUserId ? authorText : ''
         ].filter(Boolean).join('\n');
-        const match = state.enabled ? findBlockedKeyword(searchableText, state.keywords) : null;
+        const match = resolveBlockedMatch(
+            searchableText,
+            state.keywords,
+            state.enabled,
+            state.blockPromoted,
+            promotedLabel
+        );
         if (!match) return restore(article);
         const container = containerOf(article);
         container.dataset.txbHidden = 'true';
@@ -275,7 +285,7 @@
             '#txb-overlay button:disabled{'
         );
         style.textContent += `
-#txb-floating-counter{--txb-float-bg:rgba(255,255,255,.96);--txb-float-text:#0f1419;--txb-float-muted:#536471;position:fixed;left:50%;bottom:32px;z-index:2147483645;display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid rgba(15,20,25,.12);border-radius:999px;color:var(--txb-float-text);background:var(--txb-float-bg);box-shadow:0 8px 28px rgba(0,0,0,.22);pointer-events:none;font-family:TwitterChirp,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:txbFloatNotice 1s cubic-bezier(.2,.8,.2,1) both;backdrop-filter:blur(10px)}#txb-floating-counter[data-theme=dark]{--txb-float-bg:rgba(21,32,43,.96);--txb-float-text:#f7f9f9;--txb-float-muted:#8b98a5;border-color:rgba(255,255,255,.14)}.txb-floating-label{color:var(--txb-float-muted);font-size:12px;font-weight:650}.txb-floating-total{font-size:16px;font-weight:800}.txb-floating-delta{padding:3px 8px;border-radius:999px;color:#007a51;background:rgba(0,186,124,.14);font-size:13px;font-weight:850}@keyframes txbFloatNotice{0%{opacity:0;transform:translate(-50%,12px) scale(.96)}14%,78%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-7px) scale(.98)}}.txb-card-wide{grid-column:1/-1;min-height:60px}@media(max-width:520px){#txb-floating-counter{bottom:82px;max-width:calc(100vw - 24px)}}@media(prefers-reduced-motion:reduce){#txb-floating-counter{animation:none}}
+#txb-floating-counter{--txb-float-bg:rgba(255,255,255,.96);--txb-float-text:#0f1419;--txb-float-muted:#536471;position:fixed;left:50%;bottom:32px;z-index:2147483645;display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid rgba(15,20,25,.12);border-radius:999px;color:var(--txb-float-text);background:var(--txb-float-bg);box-shadow:0 8px 28px rgba(0,0,0,.22);pointer-events:none;font-family:TwitterChirp,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:txbFloatNotice 1s cubic-bezier(.2,.8,.2,1) both;backdrop-filter:blur(10px)}#txb-floating-counter[data-theme=dark]{--txb-float-bg:rgba(21,32,43,.96);--txb-float-text:#f7f9f9;--txb-float-muted:#8b98a5;border-color:rgba(255,255,255,.14)}.txb-floating-label{color:var(--txb-float-muted);font-size:12px;font-weight:650}.txb-floating-total{font-size:16px;font-weight:800}.txb-floating-delta{padding:3px 8px;border-radius:999px;color:#007a51;background:rgba(0,186,124,.14);font-size:13px;font-weight:850}@keyframes txbFloatNotice{0%{opacity:0;transform:translate(-50%,12px) scale(.96)}14%,78%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-7px) scale(.98)}}.txb-card-wide{grid-column:1/-1;min-height:60px}.txb-compact-settings{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.txb-compact-settings .txb-card{min-width:0;min-height:66px;padding:10px}.txb-compact-settings .txb-value{font-size:15px}.txb-heading-actions{display:flex;align-items:center;gap:6px}.txb-clear-keywords{padding:2px 7px;border:0;border-radius:99px;color:var(--danger);background:transparent;font:inherit;font-size:11px;font-weight:700;cursor:pointer}.txb-clear-keywords:hover{background:rgba(244,33,46,.1)}@media(max-width:520px){#txb-floating-counter{bottom:82px;max-width:calc(100vw - 24px)}.txb-compact-settings{gap:8px}.txb-compact-settings .txb-card{padding:9px}}@media(prefers-reduced-motion:reduce){#txb-floating-counter{animation:none}}
         `;
         document.head.appendChild(style);
     };
@@ -356,9 +366,14 @@
         ui.userIdToggle.setAttribute('aria-checked', String(state.filterUserId));
         ui.userIdStatus.textContent = state.filterUserId ? '已开启' : '已关闭';
     };
+    const updatePromotedSetting = () => {
+        ui.promotedToggle.setAttribute('aria-checked', String(state.blockPromoted));
+        ui.promotedStatus.textContent = state.blockPromoted ? '已开启' : '已关闭';
+    };
     const renderList = () => {
         ui.list.replaceChildren();
         ui.count.textContent = state.keywords.length.toLocaleString();
+        ui.clearKeywords.disabled = state.keywords.length === 0;
         if (!state.keywords.length) {
             const empty = document.createElement('div');
             empty.className = 'txb-empty';
@@ -502,6 +517,16 @@
         state.total = 0;
         saveStats(); updateStats(); notify('累计拦截数已清零。', 'success');
     };
+    const clearAllKeywords = () => {
+        const count = state.keywords.length;
+        if (!count) return notify('当前没有可清空的屏蔽词。', 'error');
+        if (!confirm(`确认删除全部 ${count.toLocaleString()} 个屏蔽词？此操作无法撤销。`)) return;
+        state.keywords = [];
+        saveKeywords();
+        renderList();
+        reapply();
+        notify(`已删除全部 ${count.toLocaleString()} 个屏蔽词。`, 'success');
+    };
     const closeModal = () => {
         document.getElementById('txb-overlay')?.remove();
         document.body.style.overflow = previousOverflow;
@@ -525,24 +550,41 @@
         const overlay = document.createElement('div');
         overlay.id = 'txb-overlay';
         overlay.dataset.theme = darkPage() ? 'dark' : 'light';
-        overlay.innerHTML = `<section id="txb-dialog" role="dialog" aria-modal="true" aria-labelledby="txb-title" aria-describedby="txb-description"><header class="txb-header"><div><p class="txb-eyebrow">X Keyword Blocker</p><h1 id="txb-title">关键词屏蔽</h1><p id="txb-description" class="txb-subtitle">管理时间线过滤规则与导入导出。</p></div><button id="txb-close" class="txb-icon" type="button" aria-label="关闭">×</button></header><div class="txb-content"><div class="txb-status"><div class="txb-card"><div><span class="txb-label">过滤状态</span><strong id="txb-enabled" class="txb-value"></strong></div><button id="txb-toggle" class="txb-switch" type="button" role="switch" aria-label="启用关键词过滤"></button></div><div class="txb-card"><div><span class="txb-label">累计拦截</span><strong class="txb-value"><span id="txb-total">0</span> 条</strong></div><button id="txb-reset" type="button">清零</button></div></div><form id="txb-add" class="txb-form"><label class="txb-sr" for="txb-input">新关键词</label><input id="txb-input" class="txb-input" maxlength="${MAX_LENGTH}" autocomplete="off" placeholder="输入要屏蔽的关键词…"><button class="txb-primary" type="submit">添加</button></form><p id="txb-message" role="status" aria-live="polite">每行一个关键词，匹配时不区分大小写。</p><div class="txb-tools"><button id="txb-file" class="txb-secondary" type="button">从文件导入</button><button id="txb-url" class="txb-secondary" type="button" aria-expanded="false">从网址导入</button><button id="txb-export" class="txb-secondary" type="button">导出 TXT</button><input id="txb-file-input" class="txb-sr" type="file" accept=".txt,text/plain"></div><form id="txb-url-form" hidden><label class="txb-sr" for="txb-url-input">HTTPS 文本网址</label><input id="txb-url-input" class="txb-input" type="url" placeholder="https://example.com/keywords.txt"><button id="txb-url-submit" class="txb-primary">读取</button></form><section id="txb-preview" class="txb-preview" aria-label="导入预览" hidden></section><div class="txb-heading"><h2>屏蔽词</h2><span id="txb-count" class="txb-count">0</span></div><div id="txb-list" class="txb-list"></div></div><footer class="txb-footer">快捷键 Alt + Shift + K · 设置仅保存在当前浏览器</footer></section>`;
+        overlay.innerHTML = `<section id="txb-dialog" role="dialog" aria-modal="true" aria-labelledby="txb-title" aria-describedby="txb-description"><header class="txb-header"><div><p class="txb-eyebrow">X Keyword Blocker</p><h1 id="txb-title">关键词屏蔽</h1><p id="txb-description" class="txb-subtitle">管理时间线过滤规则与导入导出。</p></div><button id="txb-close" class="txb-icon" type="button" aria-label="关闭">×</button></header><div class="txb-content"><div class="txb-status"><div class="txb-card"><div><span class="txb-label">过滤状态</span><strong id="txb-enabled" class="txb-value"></strong></div><button id="txb-toggle" class="txb-switch" type="button" role="switch" aria-label="启用帖子过滤"></button></div><div class="txb-card"><div><span class="txb-label">累计拦截</span><strong class="txb-value"><span id="txb-total">0</span> 条</strong></div><button id="txb-reset" type="button">清零</button></div></div><form id="txb-add" class="txb-form"><label class="txb-sr" for="txb-input">新关键词</label><input id="txb-input" class="txb-input" maxlength="${MAX_LENGTH}" autocomplete="off" placeholder="输入要屏蔽的关键词…"><button class="txb-primary" type="submit">添加</button></form><p id="txb-message" role="status" aria-live="polite">每行一个关键词，匹配时不区分大小写。</p><div class="txb-tools"><button id="txb-file" class="txb-secondary" type="button">从文件导入</button><button id="txb-url" class="txb-secondary" type="button" aria-expanded="false">从网址导入</button><button id="txb-export" class="txb-secondary" type="button">导出 TXT</button><input id="txb-file-input" class="txb-sr" type="file" accept=".txt,text/plain"></div><form id="txb-url-form" hidden><label class="txb-sr" for="txb-url-input">HTTPS 文本网址</label><input id="txb-url-input" class="txb-input" type="url" placeholder="https://example.com/keywords.txt"><button id="txb-url-submit" class="txb-primary">读取</button></form><section id="txb-preview" class="txb-preview" aria-label="导入预览" hidden></section><div class="txb-heading"><h2>屏蔽词</h2><span id="txb-count" class="txb-count">0</span></div><div id="txb-list" class="txb-list"></div></div><footer class="txb-footer">快捷键 Alt + Shift + K · 设置仅保存在当前浏览器</footer></section>`;
         const noticeCard = document.createElement('div');
         noticeCard.className = 'txb-card txb-card-wide';
         noticeCard.innerHTML = '<div><span class="txb-label">浮动拦截提示</span><strong id="txb-notice-status" class="txb-value"></strong></div><button id="txb-notice-toggle" class="txb-switch" type="button" role="switch" aria-label="显示浮动拦截提示"></button>';
         overlay.querySelector('.txb-status').appendChild(noticeCard);
+        const compactSettings = document.createElement('div');
+        compactSettings.className = 'txb-compact-settings';
         const userIdCard = document.createElement('div');
-        userIdCard.className = 'txb-card txb-card-wide';
+        userIdCard.className = 'txb-card';
         userIdCard.innerHTML = '<div><span class="txb-label">匹配作者名称与 ID</span><strong id="txb-user-id-status" class="txb-value"></strong></div><button id="txb-user-id-toggle" class="txb-switch" type="button" role="switch" aria-label="在作者显示名称和用户 ID 中匹配关键词"></button>';
-        overlay.querySelector('.txb-status').appendChild(userIdCard);
+        const promotedCard = document.createElement('div');
+        promotedCard.className = 'txb-card';
+        promotedCard.innerHTML = '<div><span class="txb-label">屏蔽广告</span><strong id="txb-promoted-status" class="txb-value"></strong></div><button id="txb-promoted-toggle" class="txb-switch" type="button" role="switch" aria-label="屏蔽带推广标记的帖子"></button>';
+        compactSettings.append(userIdCard, promotedCard);
+        overlay.querySelector('.txb-status').appendChild(compactSettings);
+        const countBadge = overlay.querySelector('#txb-count');
+        const headingActions = document.createElement('div');
+        headingActions.className = 'txb-heading-actions';
+        const clearKeywords = document.createElement('button');
+        clearKeywords.id = 'txb-clear-keywords';
+        clearKeywords.className = 'txb-clear-keywords';
+        clearKeywords.type = 'button';
+        clearKeywords.textContent = '清空';
+        clearKeywords.setAttribute('aria-label', '删除全部屏蔽词');
+        countBadge.replaceWith(headingActions);
+        headingActions.append(countBadge, clearKeywords);
         document.body.appendChild(overlay);
         document.body.style.overflow = 'hidden';
         const $ = (selector) => overlay.querySelector(selector);
-        ui = { overlay, dialog: $('#txb-dialog'), input: $('#txb-input'), message: $('#txb-message'), list: $('#txb-list'), count: $('#txb-count'), toggle: $('#txb-toggle'), enabled: $('#txb-enabled'), total: $('#txb-total'), noticeToggle: $('#txb-notice-toggle'), noticeStatus: $('#txb-notice-status'), userIdToggle: $('#txb-user-id-toggle'), userIdStatus: $('#txb-user-id-status'), fileInput: $('#txb-file-input'), urlButton: $('#txb-url'), urlForm: $('#txb-url-form'), urlInput: $('#txb-url-input'), urlSubmit: $('#txb-url-submit'), preview: $('#txb-preview') };
+        ui = { overlay, dialog: $('#txb-dialog'), input: $('#txb-input'), message: $('#txb-message'), list: $('#txb-list'), count: $('#txb-count'), clearKeywords: $('#txb-clear-keywords'), toggle: $('#txb-toggle'), enabled: $('#txb-enabled'), total: $('#txb-total'), noticeToggle: $('#txb-notice-toggle'), noticeStatus: $('#txb-notice-status'), userIdToggle: $('#txb-user-id-toggle'), userIdStatus: $('#txb-user-id-status'), promotedToggle: $('#txb-promoted-toggle'), promotedStatus: $('#txb-promoted-status'), fileInput: $('#txb-file-input'), urlButton: $('#txb-url'), urlForm: $('#txb-url-form'), urlInput: $('#txb-url-input'), urlSubmit: $('#txb-url-submit'), preview: $('#txb-preview') };
         $('#txb-close').onclick = closeModal;
         overlay.onclick = (event) => { if (event.target === overlay) closeModal(); };
         overlay.onkeydown = dialogKeys;
         $('#txb-add').onsubmit = (event) => { event.preventDefault(); if (addKeyword(ui.input.value)) ui.input.value = ''; };
-        ui.toggle.onclick = () => { state.enabled = !state.enabled; write(KEYS.enabled, state.enabled); updateEnabled(); reapply(); notify(state.enabled ? '关键词过滤已启用。' : '过滤已暂停，帖子已恢复显示。', 'success'); };
+        ui.toggle.onclick = () => { state.enabled = !state.enabled; write(KEYS.enabled, state.enabled); updateEnabled(); reapply(); notify(state.enabled ? '帖子过滤已启用。' : '过滤已暂停，帖子已恢复显示。', 'success'); };
         ui.noticeToggle.onclick = () => {
             state.floatingNotice = !state.floatingNotice;
             write(KEYS.floatingNotice, state.floatingNotice);
@@ -557,13 +599,21 @@
             reapply();
             notify(state.filterUserId ? '作者名称与 ID 过滤已开启。' : '作者名称与 ID 过滤已关闭。', 'success');
         };
+        ui.promotedToggle.onclick = () => {
+            state.blockPromoted = !state.blockPromoted;
+            write(KEYS.blockPromoted, state.blockPromoted);
+            updatePromotedSetting();
+            reapply();
+            notify(state.blockPromoted ? '广告屏蔽已开启。' : '广告屏蔽已关闭。', 'success');
+        };
         $('#txb-reset').onclick = resetCounter;
+        ui.clearKeywords.onclick = clearAllKeywords;
         $('#txb-export').onclick = exportTxt;
         $('#txb-file').onclick = () => ui.fileInput.click();
         ui.fileInput.onchange = () => { importFile(ui.fileInput.files?.[0]); ui.fileInput.value = ''; };
         ui.urlButton.onclick = () => { ui.urlForm.hidden = !ui.urlForm.hidden; ui.urlButton.setAttribute('aria-expanded', String(!ui.urlForm.hidden)); if (!ui.urlForm.hidden) ui.urlInput.focus(); };
         ui.urlForm.onsubmit = (event) => { event.preventDefault(); importUrl(ui.urlInput.value.trim()); };
-        updateEnabled(); updateFloatingNoticeSetting(); updateUserIdFilterSetting(); updateStats(); renderList();
+        updateEnabled(); updateFloatingNoticeSetting(); updateUserIdFilterSetting(); updatePromotedSetting(); updateStats(); renderList();
         requestAnimationFrame(() => ui?.input.focus());
     };
 

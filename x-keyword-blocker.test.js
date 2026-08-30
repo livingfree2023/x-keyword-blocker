@@ -8,7 +8,8 @@ const {
     parseImportText,
     userIdFromHref,
     buildAuthorSearchText,
-    isPromotedLabelText
+    isPromotedLabelText,
+    resolveBlockedMatch
 } = require('./x-keyword-blocker.js');
 
 test('matching ignores case and normalizes full-width characters', () => {
@@ -56,4 +57,11 @@ test('promoted labels are recognized across supported locales', () => {
     assert.equal(isPromotedLabelText('Promoted'), true);
     assert.equal(isPromotedLabelText('Sponsored'), true);
     assert.equal(isPromotedLabelText('普通帖子'), false);
+});
+
+test('promoted post blocking is independent from keyword matching', () => {
+    assert.equal(resolveBlockedMatch('普通内容', [], true, true, '广告'), '广告');
+    assert.equal(resolveBlockedMatch('普通内容', [], true, false, '广告'), null);
+    assert.equal(resolveBlockedMatch('包含 crypto', ['crypto'], true, false, '广告'), 'crypto');
+    assert.equal(resolveBlockedMatch('包含 crypto', ['crypto'], false, true, '广告'), null);
 });
