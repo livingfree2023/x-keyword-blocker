@@ -7,7 +7,8 @@ const {
     normalizeKeywords,
     parseImportText,
     userIdFromHref,
-    buildAuthorSearchText
+    buildAuthorSearchText,
+    isPromotedLabelText
 } = require('./x-keyword-blocker.js');
 
 test('matching ignores case and normalizes full-width characters', () => {
@@ -48,4 +49,11 @@ test('author search text includes display name and user ID', () => {
     const authorText = buildAuthorSearchText('曼曼处男无偿\n@qdcbtwnfxmtzjx', 'qdcbtwnfxmtzjx');
     assert.equal(findBlockedKeyword(authorText, ['处男无偿']), '处男无偿');
     assert.equal(findBlockedKeyword(authorText, ['@qdcbtwnfxmtzjx']), '@qdcbtwnfxmtzjx');
+});
+
+test('promoted labels are recognized across supported locales', () => {
+    assert.equal(isPromotedLabelText('广告'), true);
+    assert.equal(isPromotedLabelText('Promoted'), true);
+    assert.equal(isPromotedLabelText('Sponsored'), true);
+    assert.equal(isPromotedLabelText('普通帖子'), false);
 });

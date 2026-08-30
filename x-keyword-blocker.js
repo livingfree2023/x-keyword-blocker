@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter / X 关键词屏蔽工具
 // @namespace    https://gist.github.com/livingfree2023/0280fc4517174563b0e5161c10a4ced8
-// @version      1.3.1
+// @version      1.3.2
 // @description  高效屏蔽包含指定关键词的帖子，支持统计、暂停、TXT 与网址导入导出
 // @author       livingfree
 // @license      MIT
@@ -27,6 +27,12 @@
     const MAX_KEYWORDS = 2000;
     const MAX_LENGTH = 100;
     const MAX_FILE_BYTES = 512 * 1024;
+    const PROMOTED_LABELS = new Set([
+        'ad', 'promoted', 'sponsored',
+        '广告', '廣告', '推广', '推廣', '赞助', '贊助',
+        'プロモーション', '프로모션', 'реклама', 'anzeige',
+        'sponsorisé', 'promocionado', 'patrocinado'
+    ]);
 
     const clean = (value) => typeof value === 'string' ? value.trim() : '';
     const keyOf = (value) => clean(value).normalize('NFKC').toLocaleLowerCase();
@@ -83,6 +89,7 @@
         userId ? `@${userId}` : '',
         userId
     ].filter(Boolean).join('\n');
+    const isPromotedLabelText = (value) => PROMOTED_LABELS.has(keyOf(value));
 
     // Pure helpers are testable without a browser or userscript manager.
     if (typeof process !== 'undefined' && process.versions?.node
@@ -93,7 +100,8 @@
             normalizeKeywords,
             parseImportText,
             userIdFromHref,
-            buildAuthorSearchText
+            buildAuthorSearchText,
+            isPromotedLabelText
         };
         return;
     }
@@ -185,6 +193,17 @@
             authorId
         );
     };
+    const tweetPromotedSearchText = (article) => {
+        for (const span of article.querySelectorAll('span')) {
+            if (span.closest('[data-testid="tweetText"], [data-testid="User-Name"]')) continue;
+            const label = clean(span.textContent || '');
+            if (isPromotedLabelText(label)) {
+                // Canonical aliases let the default Chinese keywords block ads in any supported locale.
+                return `${label}\n广告\n推广\nad\npromoted\nsponsored`;
+            }
+        }
+        return '';
+    };
     const restore = (article) => {
         const container = containerOf(article);
         if (container.dataset.txbHidden !== 'true') return;
@@ -198,12 +217,15 @@
         const text = tweetText(article);
         const authorId = tweetAuthorId(article);
         const authorText = tweetAuthorSearchText(article, authorId);
-        const signature = `${state.enabled}|${state.revision}|${postId(article) || ''}|${authorText}|${text}`;
+        const promotedText = tweetPromotedSearchText(article);
+        const signature = `${state.enabled}|${state.revision}|${postId(article) || ''}|${authorText}|${promotedText}|${text}`;
         if (cache.get(article) === signature) return;
         cache.set(article, signature);
-        const searchableText = state.filterUserId && authorText
-            ? `${text}\n${authorText}`
-            : text;
+        const searchableText = [
+            text,
+            promotedText,
+            state.filterUserId ? authorText : ''
+        ].filter(Boolean).join('\n');
         const match = state.enabled ? findBlockedKeyword(searchableText, state.keywords) : null;
         if (!match) return restore(article);
         const container = containerOf(article);
