@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter / X 关键词屏蔽工具
 // @namespace    https://gist.github.com/livingfree2023/0280fc4517174563b0e5161c10a4ced8
-// @version      1.3.0
+// @version      1.3.1
 // @description  高效屏蔽包含指定关键词的帖子，支持统计、暂停、TXT 与网址导入导出
 // @author       livingfree
 // @license      MIT
@@ -78,6 +78,11 @@
         try { return decodeURIComponent(match[1]); }
         catch { return match[1]; }
     };
+    const buildAuthorSearchText = (userNameText, userId) => [
+        clean(userNameText),
+        userId ? `@${userId}` : '',
+        userId
+    ].filter(Boolean).join('\n');
 
     // Pure helpers are testable without a browser or userscript manager.
     if (typeof process !== 'undefined' && process.versions?.node
@@ -87,7 +92,8 @@
             keyOf,
             normalizeKeywords,
             parseImportText,
-            userIdFromHref
+            userIdFromHref,
+            buildAuthorSearchText
         };
         return;
     }
@@ -172,6 +178,13 @@
         }
         return '';
     };
+    const tweetAuthorSearchText = (article, authorId) => {
+        const userName = article.querySelector('[data-testid="User-Name"]');
+        return buildAuthorSearchText(
+            userName?.innerText || userName?.textContent || '',
+            authorId
+        );
+    };
     const restore = (article) => {
         const container = containerOf(article);
         if (container.dataset.txbHidden !== 'true') return;
@@ -184,11 +197,12 @@
         if (!article?.isConnected) return;
         const text = tweetText(article);
         const authorId = tweetAuthorId(article);
-        const signature = `${state.enabled}|${state.revision}|${postId(article) || ''}|${authorId}|${text}`;
+        const authorText = tweetAuthorSearchText(article, authorId);
+        const signature = `${state.enabled}|${state.revision}|${postId(article) || ''}|${authorText}|${text}`;
         if (cache.get(article) === signature) return;
         cache.set(article, signature);
-        const searchableText = state.filterUserId && authorId
-            ? `${text}\n@${authorId}\n${authorId}`
+        const searchableText = state.filterUserId && authorText
+            ? `${text}\n${authorText}`
             : text;
         const match = state.enabled ? findBlockedKeyword(searchableText, state.keywords) : null;
         if (!match) return restore(article);
@@ -496,7 +510,7 @@
         overlay.querySelector('.txb-status').appendChild(noticeCard);
         const userIdCard = document.createElement('div');
         userIdCard.className = 'txb-card txb-card-wide';
-        userIdCard.innerHTML = '<div><span class="txb-label">匹配用户 ID（@username）</span><strong id="txb-user-id-status" class="txb-value"></strong></div><button id="txb-user-id-toggle" class="txb-switch" type="button" role="switch" aria-label="在用户 ID 中匹配关键词"></button>';
+        userIdCard.innerHTML = '<div><span class="txb-label">匹配作者名称与 ID</span><strong id="txb-user-id-status" class="txb-value"></strong></div><button id="txb-user-id-toggle" class="txb-switch" type="button" role="switch" aria-label="在作者显示名称和用户 ID 中匹配关键词"></button>';
         overlay.querySelector('.txb-status').appendChild(userIdCard);
         document.body.appendChild(overlay);
         document.body.style.overflow = 'hidden';
@@ -519,7 +533,7 @@
             write(KEYS.filterUserId, state.filterUserId);
             updateUserIdFilterSetting();
             reapply();
-            notify(state.filterUserId ? '用户 ID 关键词过滤已开启。' : '用户 ID 关键词过滤已关闭。', 'success');
+            notify(state.filterUserId ? '作者名称与 ID 过滤已开启。' : '作者名称与 ID 过滤已关闭。', 'success');
         };
         $('#txb-reset').onclick = resetCounter;
         $('#txb-export').onclick = exportTxt;

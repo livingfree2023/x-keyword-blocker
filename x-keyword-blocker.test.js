@@ -6,7 +6,8 @@ const {
     keyOf,
     normalizeKeywords,
     parseImportText,
-    userIdFromHref
+    userIdFromHref,
+    buildAuthorSearchText
 } = require('./x-keyword-blocker.js');
 
 test('matching ignores case and normalizes full-width characters', () => {
@@ -41,4 +42,10 @@ test('user ID extraction accepts profile links but not post links', () => {
     assert.equal(userIdFromHref('/livingfree2023/'), 'livingfree2023');
     assert.equal(userIdFromHref('/livingfree2023/status/123'), '');
     assert.equal(userIdFromHref('https://x.com/livingfree2023'), '');
+});
+
+test('author search text includes display name and user ID', () => {
+    const authorText = buildAuthorSearchText('曼曼处男无偿\n@qdcbtwnfxmtzjx', 'qdcbtwnfxmtzjx');
+    assert.equal(findBlockedKeyword(authorText, ['处男无偿']), '处男无偿');
+    assert.equal(findBlockedKeyword(authorText, ['@qdcbtwnfxmtzjx']), '@qdcbtwnfxmtzjx');
 });
