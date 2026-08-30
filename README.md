@@ -44,3 +44,7 @@ npm test
 ```
 
 X 的页面结构可能随时调整。如果 X 修改了 `data-testid="tweet"` 或 `data-testid="tweetText"`，选择器可能需要同步更新。
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE) 发布。

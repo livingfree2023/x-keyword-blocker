@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         Twitter / X 关键词屏蔽工具
-// @namespace    https://github.com/
+// @namespace    https://gist.github.com/livingfree2023/0280fc4517174563b0e5161c10a4ced8
 // @version      1.0.0
 // @description  高效屏蔽包含指定关键词的帖子，支持统计、暂停、TXT 与网址导入导出
 // @author       livingfree
+// @license      MIT
 // @match        https://twitter.com/*
 // @match        https://x.com/*
 // @grant        GM_getValue
