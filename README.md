@@ -1,6 +1,6 @@
 # X Keyword Blocker
 
-当前版本：**1.4.0**
+当前版本：**1.4.1**
 
 一个轻量、无依赖的 Tampermonkey / Violentmonkey 用户脚本，通过关键词自动隐藏 X（Twitter）时间线中的帖子。支持 `x.com` 和 `twitter.com`。
 
@@ -79,7 +79,9 @@ airdrop
 - 每个关键词最多 100 个字符
 - 导入文件最大 512 KB
 - 网址导入仅接受 HTTPS 地址
-- 网址服务器必须允许浏览器跨域读取；GitHub Raw 等公开文本地址通常可用
+- 支持 GitHub Raw、Cloudflare Pages 等公开 HTTPS 纯文本地址
+
+网址导入通过用户脚本管理器的跨域请求功能读取，因此安装或升级时，Tampermonkey / Violentmonkey 可能要求确认网络访问权限。脚本只会请求你在导入框中主动填写的 HTTPS 地址，不会携带登录 Cookie。
 
 屏蔽词数量右侧的“清空”按钮可以一次删除全部关键词。执行前会显示确认提示；确认后无法撤销，但不会改变广告屏蔽、作者 ID 匹配等开关设置。
 

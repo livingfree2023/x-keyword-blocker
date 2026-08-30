@@ -9,7 +9,9 @@ const {
     userIdFromHref,
     buildAuthorSearchText,
     isPromotedLabelText,
-    resolveBlockedMatch
+    resolveBlockedMatch,
+    responseHeader,
+    remoteImportErrorMessage
 } = require('./x-keyword-blocker.js');
 
 test('matching ignores case and normalizes full-width characters', () => {
@@ -64,4 +66,12 @@ test('promoted post blocking is independent from keyword matching', () => {
     assert.equal(resolveBlockedMatch('普通内容', [], true, false, '广告'), null);
     assert.equal(resolveBlockedMatch('包含 crypto', ['crypto'], true, false, '广告'), 'crypto');
     assert.equal(resolveBlockedMatch('包含 crypto', ['crypto'], false, true, '广告'), null);
+});
+
+test('remote import helpers parse headers and report specific failures', () => {
+    const headers = 'Content-Type: text/plain\r\nContent-Length: 368\r\n';
+    assert.equal(responseHeader(headers, 'content-length'), '368');
+    assert.equal(responseHeader(headers, 'missing'), '');
+    assert.equal(remoteImportErrorMessage({ code: 'timeout' }), '读取超时，请稍后重试。');
+    assert.equal(remoteImportErrorMessage({ code: 'http', status: 404 }), '服务器返回 HTTP 404，无法读取文件。');
 });

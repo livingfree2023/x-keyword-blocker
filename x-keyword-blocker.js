@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter / X 关键词屏蔽工具
-// @namespace    https://gist.github.com/livingfree2023/0280fc4517174563b0e5161c10a4ced8
-// @version      1.4.0
+// @namespace    https://github.com/livingfree2023/x-keyword-blocker
+// @version      1.4.1
 // @description  屏蔽指定关键词与推广帖子，支持统计、暂停、TXT 与网址导入导出
 // @author       livingfree
 // @license      MIT
@@ -10,6 +10,8 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
+// @grant        GM_xmlhttpRequest
+// @connect      *
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -96,6 +98,22 @@
         if (blockPromoted && promotedLabel) return promotedLabel;
         return findBlockedKeyword(text, keywords);
     };
+    const responseHeader = (headers, name) => {
+        const target = String(name || '').toLocaleLowerCase();
+        for (const line of String(headers || '').split(/\r?\n/)) {
+            const separator = line.indexOf(':');
+            if (separator < 0 || line.slice(0, separator).trim().toLocaleLowerCase() !== target) continue;
+            return line.slice(separator + 1).trim();
+        }
+        return '';
+    };
+    const remoteImportErrorMessage = (error) => {
+        if (error?.code === 'timeout') return '读取超时，请稍后重试。';
+        if (error?.code === 'too_large') return '远程文件过大，请使用不超过 512 KB 的文本文件。';
+        if (error?.code === 'insecure_redirect') return '网址重定向到了非 HTTPS 地址，已停止读取。';
+        if (error?.code === 'http') return `服务器返回 HTTP ${error.status || '错误'}，无法读取文件。`;
+        return '网络请求失败，请检查网址、网络连接或用户脚本的跨域权限。';
+    };
 
     // Pure helpers are testable without a browser or userscript manager.
     if (typeof process !== 'undefined' && process.versions?.node
@@ -108,7 +126,9 @@
             userIdFromHref,
             buildAuthorSearchText,
             isPromotedLabelText,
-            resolveBlockedMatch
+            resolveBlockedMatch,
+            responseHeader,
+            remoteImportErrorMessage
         };
         return;
     }
@@ -481,6 +501,55 @@
             notify('无法读取这个文件。', 'error');
         }
     };
+    const remoteError = (code, details = {}) => Object.assign(new Error(code), { code, ...details });
+    const requestRemoteText = (url) => new Promise((resolve, reject) => {
+        let settled = false;
+        let request = null;
+        const succeed = (value) => {
+            if (settled) return;
+            settled = true;
+            resolve(value);
+        };
+        const fail = (error) => {
+            if (settled) return;
+            settled = true;
+            reject(error);
+        };
+        try {
+            request = GM_xmlhttpRequest({
+                method: 'GET',
+                url: url.href,
+                headers: { Accept: 'text/plain, text/*;q=0.9, */*;q=0.1' },
+                anonymous: true,
+                timeout: 10000,
+                onprogress: (progress) => {
+                    if (Number(progress.loaded) <= MAX_FILE_BYTES || settled) return;
+                    fail(remoteError('too_large'));
+                    request?.abort();
+                },
+                onload: (response) => {
+                    if (response.status < 200 || response.status >= 300) {
+                        return fail(remoteError('http', { status: response.status }));
+                    }
+                    let finalUrl;
+                    try { finalUrl = new URL(response.finalUrl || url.href); }
+                    catch { return fail(remoteError('network')); }
+                    if (finalUrl.protocol !== 'https:') return fail(remoteError('insecure_redirect'));
+                    const declaredSize = Number(responseHeader(response.responseHeaders, 'content-length'));
+                    if (declaredSize > MAX_FILE_BYTES) return fail(remoteError('too_large'));
+                    const text = typeof response.responseText === 'string' ? response.responseText : '';
+                    if (new Blob([text]).size > MAX_FILE_BYTES) return fail(remoteError('too_large'));
+                    succeed({ text, finalUrl });
+                },
+                ontimeout: () => fail(remoteError('timeout')),
+                onerror: () => fail(remoteError('network')),
+                onabort: () => fail(remoteError('network'))
+            });
+        } catch (error) {
+            console.warn('[X Keyword Blocker] 无法启动跨域请求', error);
+            fail(remoteError('network'));
+        }
+    });
     const importUrl = async (value) => {
         let url;
         try {
@@ -490,22 +559,14 @@
         const submitButton = ui.urlSubmit;
         submitButton.disabled = true;
         submitButton.textContent = '读取中…';
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 10000);
         try {
-            const response = await fetch(url.href, { mode: 'cors', credentials: 'omit', signal: controller.signal });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const declaredSize = Number(response.headers.get('content-length'));
-            if (Number.isFinite(declaredSize) && declaredSize > MAX_FILE_BYTES) throw new Error('too large');
-            const text = await response.text();
-            if (new Blob([text]).size > MAX_FILE_BYTES) throw new Error('too large');
-            previewImport(text, url.hostname);
+            const result = await requestRemoteText(url);
+            previewImport(result.text, result.finalUrl.hostname);
             notify('网址读取成功，请确认导入方式。');
         } catch (error) {
             console.warn('[X Keyword Blocker] 网址导入失败', error);
-            notify(error.name === 'AbortError' ? '读取超时，请稍后重试。' : '无法读取。请使用允许跨域访问的 HTTPS 纯文本链接。', 'error');
+            notify(remoteImportErrorMessage(error), 'error');
         } finally {
-            clearTimeout(timer);
             if (submitButton.isConnected) {
                 submitButton.disabled = false;
                 submitButton.textContent = '读取';
