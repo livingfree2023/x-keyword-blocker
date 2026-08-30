@@ -21,7 +21,7 @@
 
 ## 使用
 
-从 Userscript 管理器菜单选择“管理屏蔽关键词”，或按 `Alt + Shift + K` 打开管理面板。
+从 Userscript 管理器菜单选择“管理屏蔽关键词”，或按 `Alt + Shift + K`（Mac：`Option + Shift + K`）打开管理面板。
 
 TXT 文件采用“一行一个关键词”的格式。导入时可以选择：
 

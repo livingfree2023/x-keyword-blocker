@@ -425,10 +425,14 @@
 
     GM_registerMenuCommand('管理屏蔽关键词', showModal);
     window.addEventListener('keydown', (event) => {
-        if (event.altKey && event.shiftKey && event.key.toLocaleLowerCase() === 'k') {
-            event.preventDefault(); showModal();
+        // macOS 的 Option+Shift+K 可能把 event.key 映射成特殊字符；event.code 始终代表物理 K 键。
+        const isKKey = event.code === 'KeyK' || event.key.toLocaleLowerCase() === 'k';
+        if (event.altKey && event.shiftKey && !event.metaKey && isKKey) {
+            event.preventDefault();
+            event.stopPropagation();
+            showModal();
         }
-    });
+    }, true);
     window.addEventListener('pagehide', saveStats);
     document.querySelectorAll('article[data-testid="tweet"]').forEach(queue);
 })();
