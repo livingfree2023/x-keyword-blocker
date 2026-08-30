@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter / X 关键词屏蔽工具
 // @namespace    https://gist.github.com/livingfree2023/0280fc4517174563b0e5161c10a4ced8
-// @version      1.0.0
+// @version      1.2.0
 // @description  高效屏蔽包含指定关键词的帖子，支持统计、暂停、TXT 与网址导入导出
 // @author       livingfree
 // @license      MIT
@@ -19,13 +19,13 @@
     const KEYS = {
         keywords: 'twitter_blocked_keywords',
         enabled: 'twitter_blocker_enabled',
+        floatingNotice: 'twitter_blocker_floating_notice',
         stats: 'twitter_blocker_stats_v1'
     };
     const DEFAULTS = ['广告', '推广', 'crypto', 'airdrop', '抽奖'];
     const MAX_KEYWORDS = 2000;
     const MAX_LENGTH = 100;
     const MAX_FILE_BYTES = 512 * 1024;
-    const MAX_RECENT_IDS = 20000;
 
     const clean = (value) => typeof value === 'string' ? value.trim() : '';
     const keyOf = (value) => clean(value).normalize('NFKC').toLocaleLowerCase();
@@ -91,17 +91,18 @@
     };
     const storedKeywords = read(KEYS.keywords, DEFAULTS);
     const stats = read(KEYS.stats, {});
-    const recentIds = Array.isArray(stats?.recentIds)
-        ? [...new Set(stats.recentIds.map(String).filter((id) => /^\d+$/.test(id)))].slice(-MAX_RECENT_IDS)
-        : [];
     const state = {
         keywords: normalizeKeywords(Array.isArray(storedKeywords) ? storedKeywords : DEFAULTS),
         enabled: read(KEYS.enabled, true) !== false,
+        floatingNotice: read(KEYS.floatingNotice, true) !== false,
         total: Number.isSafeInteger(stats?.total) && stats.total >= 0 ? stats.total : 0,
-        recentIds,
-        recentSet: new Set(recentIds),
+        sessionPostIds: new Set(),
+        sessionArticles: new WeakSet(),
         revision: 0,
-        statsTimer: null
+        statsTimer: null,
+        floatingDelta: 0,
+        floatingBatchTimer: null,
+        floatingHideTimer: null
     };
     if (JSON.stringify(storedKeywords) !== JSON.stringify(state.keywords)) {
         write(KEYS.keywords, state.keywords);
@@ -114,7 +115,7 @@
     const saveStats = () => {
         if (state.statsTimer !== null) clearTimeout(state.statsTimer);
         state.statsTimer = null;
-        write(KEYS.stats, { total: state.total, recentIds: state.recentIds });
+        write(KEYS.stats, { total: state.total });
     };
     const scheduleStatsSave = () => {
         if (state.statsTimer === null) state.statsTimer = window.setTimeout(saveStats, 500);
@@ -133,15 +134,17 @@
     };
     const countPost = (article) => {
         const id = postId(article);
-        if (!id || state.recentSet.has(id)) return;
-        state.recentSet.add(id);
-        state.recentIds.push(id);
-        state.total += 1;
-        while (state.recentIds.length > MAX_RECENT_IDS) {
-            state.recentSet.delete(state.recentIds.shift());
+        if (id) {
+            if (state.sessionPostIds.has(id)) return;
+            state.sessionPostIds.add(id);
+        } else {
+            if (state.sessionArticles.has(article)) return;
+            state.sessionArticles.add(article);
         }
+        state.total += 1;
         updateStats();
         scheduleStatsSave();
+        scheduleFloatingNotice(1);
     };
     const containerOf = (article) => article.closest('div[data-testid="cellInnerDiv"]') || article;
     const tweetText = (article) => Array.from(article.querySelectorAll('div[data-testid="tweetText"]'))
@@ -208,6 +211,9 @@
             'button:disabled{',
             '#txb-overlay button:disabled{'
         );
+        style.textContent += `
+#txb-floating-counter{--txb-float-bg:rgba(255,255,255,.96);--txb-float-text:#0f1419;--txb-float-muted:#536471;position:fixed;left:50%;bottom:32px;z-index:2147483645;display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid rgba(15,20,25,.12);border-radius:999px;color:var(--txb-float-text);background:var(--txb-float-bg);box-shadow:0 8px 28px rgba(0,0,0,.22);pointer-events:none;font-family:TwitterChirp,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:txbFloatNotice 1s cubic-bezier(.2,.8,.2,1) both;backdrop-filter:blur(10px)}#txb-floating-counter[data-theme=dark]{--txb-float-bg:rgba(21,32,43,.96);--txb-float-text:#f7f9f9;--txb-float-muted:#8b98a5;border-color:rgba(255,255,255,.14)}.txb-floating-label{color:var(--txb-float-muted);font-size:12px;font-weight:650}.txb-floating-total{font-size:16px;font-weight:800}.txb-floating-delta{padding:3px 8px;border-radius:999px;color:#007a51;background:rgba(0,186,124,.14);font-size:13px;font-weight:850}@keyframes txbFloatNotice{0%{opacity:0;transform:translate(-50%,12px) scale(.96)}14%,78%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-7px) scale(.98)}}.txb-card-wide{grid-column:1/-1;min-height:60px}@media(max-width:520px){#txb-floating-counter{bottom:82px;max-width:calc(100vw - 24px)}}@media(prefers-reduced-motion:reduce){#txb-floating-counter{animation:none}}
+        `;
         document.head.appendChild(style);
     };
     const darkPage = () => {
@@ -220,6 +226,56 @@
         }
         return matchMedia('(prefers-color-scheme:dark)').matches;
     };
+    const removeFloatingNotice = () => {
+        if (state.floatingBatchTimer !== null) clearTimeout(state.floatingBatchTimer);
+        if (state.floatingHideTimer !== null) clearTimeout(state.floatingHideTimer);
+        state.floatingBatchTimer = null;
+        state.floatingHideTimer = null;
+        state.floatingDelta = 0;
+        document.getElementById('txb-floating-counter')?.remove();
+    };
+    const showFloatingNotice = () => {
+        state.floatingBatchTimer = null;
+        if (!state.floatingNotice || state.floatingDelta === 0) return;
+
+        injectStyles();
+        const previous = document.getElementById('txb-floating-counter');
+        const delta = state.floatingDelta + Number(previous?.dataset.delta || 0);
+        state.floatingDelta = 0;
+        previous?.remove();
+        if (state.floatingHideTimer !== null) clearTimeout(state.floatingHideTimer);
+
+        const counter = document.createElement('div');
+        counter.id = 'txb-floating-counter';
+        counter.dataset.theme = darkPage() ? 'dark' : 'light';
+        counter.dataset.delta = String(delta);
+        counter.setAttribute('role', 'status');
+        counter.setAttribute('aria-live', 'polite');
+        counter.setAttribute('aria-label', `累计拦截 ${state.total} 条，本次新增 ${delta} 条`);
+
+        const label = document.createElement('span');
+        label.className = 'txb-floating-label';
+        label.textContent = '累计拦截';
+        const total = document.createElement('strong');
+        total.className = 'txb-floating-total';
+        total.textContent = state.total.toLocaleString();
+        const change = document.createElement('strong');
+        change.className = 'txb-floating-delta';
+        change.textContent = `+${delta.toLocaleString()}`;
+        counter.append(label, total, change);
+        document.body.appendChild(counter);
+
+        state.floatingHideTimer = window.setTimeout(() => {
+            counter.remove();
+            state.floatingHideTimer = null;
+        }, 1000);
+    };
+    const scheduleFloatingNotice = (delta) => {
+        if (!state.floatingNotice) return;
+        state.floatingDelta += delta;
+        if (state.floatingBatchTimer !== null) clearTimeout(state.floatingBatchTimer);
+        state.floatingBatchTimer = window.setTimeout(showFloatingNotice, 120);
+    };
     const notify = (message, kind = 'info') => {
         if (!ui) return;
         ui.message.textContent = message;
@@ -228,6 +284,10 @@
     const updateEnabled = () => {
         ui.toggle.setAttribute('aria-checked', String(state.enabled));
         ui.enabled.textContent = state.enabled ? '运行中' : '已暂停';
+    };
+    const updateFloatingNoticeSetting = () => {
+        ui.noticeToggle.setAttribute('aria-checked', String(state.floatingNotice));
+        ui.noticeStatus.textContent = state.floatingNotice ? '已开启' : '已关闭';
     };
     const renderList = () => {
         ui.list.replaceChildren();
@@ -372,13 +432,7 @@
     };
     const resetCounter = () => {
         if (!confirm('将累计拦截数清零？关键词和过滤设置不会受影响。')) return;
-        const ids = Array.from(document.querySelectorAll(
-            'article[data-txb-hidden="true"], [data-txb-hidden="true"] article[data-testid="tweet"]'
-        ))
-            .map(postId).filter(Boolean).slice(-MAX_RECENT_IDS);
         state.total = 0;
-        state.recentIds = [...new Set(ids)];
-        state.recentSet = new Set(state.recentIds);
         saveStats(); updateStats(); notify('累计拦截数已清零。', 'success');
     };
     const closeModal = () => {
@@ -405,22 +459,33 @@
         overlay.id = 'txb-overlay';
         overlay.dataset.theme = darkPage() ? 'dark' : 'light';
         overlay.innerHTML = `<section id="txb-dialog" role="dialog" aria-modal="true" aria-labelledby="txb-title" aria-describedby="txb-description"><header class="txb-header"><div><p class="txb-eyebrow">X Keyword Blocker</p><h1 id="txb-title">关键词屏蔽</h1><p id="txb-description" class="txb-subtitle">管理时间线过滤规则与导入导出。</p></div><button id="txb-close" class="txb-icon" type="button" aria-label="关闭">×</button></header><div class="txb-content"><div class="txb-status"><div class="txb-card"><div><span class="txb-label">过滤状态</span><strong id="txb-enabled" class="txb-value"></strong></div><button id="txb-toggle" class="txb-switch" type="button" role="switch" aria-label="启用关键词过滤"></button></div><div class="txb-card"><div><span class="txb-label">累计拦截</span><strong class="txb-value"><span id="txb-total">0</span> 条</strong></div><button id="txb-reset" type="button">清零</button></div></div><form id="txb-add" class="txb-form"><label class="txb-sr" for="txb-input">新关键词</label><input id="txb-input" class="txb-input" maxlength="${MAX_LENGTH}" autocomplete="off" placeholder="输入要屏蔽的关键词…"><button class="txb-primary" type="submit">添加</button></form><p id="txb-message" role="status" aria-live="polite">每行一个关键词，匹配时不区分大小写。</p><div class="txb-tools"><button id="txb-file" class="txb-secondary" type="button">从文件导入</button><button id="txb-url" class="txb-secondary" type="button" aria-expanded="false">从网址导入</button><button id="txb-export" class="txb-secondary" type="button">导出 TXT</button><input id="txb-file-input" class="txb-sr" type="file" accept=".txt,text/plain"></div><form id="txb-url-form" hidden><label class="txb-sr" for="txb-url-input">HTTPS 文本网址</label><input id="txb-url-input" class="txb-input" type="url" placeholder="https://example.com/keywords.txt"><button id="txb-url-submit" class="txb-primary">读取</button></form><section id="txb-preview" class="txb-preview" aria-label="导入预览" hidden></section><div class="txb-heading"><h2>屏蔽词</h2><span id="txb-count" class="txb-count">0</span></div><div id="txb-list" class="txb-list"></div></div><footer class="txb-footer">快捷键 Alt + Shift + K · 设置仅保存在当前浏览器</footer></section>`;
+        const noticeCard = document.createElement('div');
+        noticeCard.className = 'txb-card txb-card-wide';
+        noticeCard.innerHTML = '<div><span class="txb-label">浮动拦截提示</span><strong id="txb-notice-status" class="txb-value"></strong></div><button id="txb-notice-toggle" class="txb-switch" type="button" role="switch" aria-label="显示浮动拦截提示"></button>';
+        overlay.querySelector('.txb-status').appendChild(noticeCard);
         document.body.appendChild(overlay);
         document.body.style.overflow = 'hidden';
         const $ = (selector) => overlay.querySelector(selector);
-        ui = { overlay, dialog: $('#txb-dialog'), input: $('#txb-input'), message: $('#txb-message'), list: $('#txb-list'), count: $('#txb-count'), toggle: $('#txb-toggle'), enabled: $('#txb-enabled'), total: $('#txb-total'), fileInput: $('#txb-file-input'), urlButton: $('#txb-url'), urlForm: $('#txb-url-form'), urlInput: $('#txb-url-input'), urlSubmit: $('#txb-url-submit'), preview: $('#txb-preview') };
+        ui = { overlay, dialog: $('#txb-dialog'), input: $('#txb-input'), message: $('#txb-message'), list: $('#txb-list'), count: $('#txb-count'), toggle: $('#txb-toggle'), enabled: $('#txb-enabled'), total: $('#txb-total'), noticeToggle: $('#txb-notice-toggle'), noticeStatus: $('#txb-notice-status'), fileInput: $('#txb-file-input'), urlButton: $('#txb-url'), urlForm: $('#txb-url-form'), urlInput: $('#txb-url-input'), urlSubmit: $('#txb-url-submit'), preview: $('#txb-preview') };
         $('#txb-close').onclick = closeModal;
         overlay.onclick = (event) => { if (event.target === overlay) closeModal(); };
         overlay.onkeydown = dialogKeys;
         $('#txb-add').onsubmit = (event) => { event.preventDefault(); if (addKeyword(ui.input.value)) ui.input.value = ''; };
         ui.toggle.onclick = () => { state.enabled = !state.enabled; write(KEYS.enabled, state.enabled); updateEnabled(); reapply(); notify(state.enabled ? '关键词过滤已启用。' : '过滤已暂停，帖子已恢复显示。', 'success'); };
+        ui.noticeToggle.onclick = () => {
+            state.floatingNotice = !state.floatingNotice;
+            write(KEYS.floatingNotice, state.floatingNotice);
+            if (!state.floatingNotice) removeFloatingNotice();
+            updateFloatingNoticeSetting();
+            notify(state.floatingNotice ? '浮动拦截提示已开启。' : '浮动拦截提示已关闭。', 'success');
+        };
         $('#txb-reset').onclick = resetCounter;
         $('#txb-export').onclick = exportTxt;
         $('#txb-file').onclick = () => ui.fileInput.click();
         ui.fileInput.onchange = () => { importFile(ui.fileInput.files?.[0]); ui.fileInput.value = ''; };
         ui.urlButton.onclick = () => { ui.urlForm.hidden = !ui.urlForm.hidden; ui.urlButton.setAttribute('aria-expanded', String(!ui.urlForm.hidden)); if (!ui.urlForm.hidden) ui.urlInput.focus(); };
         ui.urlForm.onsubmit = (event) => { event.preventDefault(); importUrl(ui.urlInput.value.trim()); };
-        updateEnabled(); updateStats(); renderList();
+        updateEnabled(); updateFloatingNoticeSetting(); updateStats(); renderList();
         requestAnimationFrame(() => ui?.input.focus());
     };
 
