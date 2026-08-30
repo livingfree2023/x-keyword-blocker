@@ -36,7 +36,7 @@ Use the Language setting in the panel to select Auto, 中文, or English. The pa
 | Setting | Default | Description |
 | --- | --- | --- |
 | Filtering | On | Master switch for all filtering |
-| Floating notification | On | Shows the lifetime total and `+N` for one second |
+| Floating notification | On | Shows the lifetime total and `+N` for two seconds |
 | Match author name and ID | Off | Also checks display names and `@usernames` |
 | Block promoted posts | On | Independently hides posts marked as promoted |
 

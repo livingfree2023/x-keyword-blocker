@@ -2,7 +2,7 @@
 // @name         Twitter / X 关键词屏蔽工具
 // @name:en      X Keyword Blocker
 // @namespace    https://github.com/livingfree2023/x-keyword-blocker
-// @version      1.5.0
+// @version      1.5.1
 // @description  屏蔽指定关键词与推广帖子，支持统计、暂停、TXT 与网址导入导出
 // @description:en Block posts by keyword and promoted-post labels, with stats and TXT/URL import/export
 // @author       livingfree
@@ -455,7 +455,7 @@
         state.floatingHideTimer = window.setTimeout(() => {
             counter.remove();
             state.floatingHideTimer = null;
-        }, 1000);
+        }, 2000);
     };
     const scheduleFloatingNotice = (delta) => {
         if (!state.floatingNotice) return;
