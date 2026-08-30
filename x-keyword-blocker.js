@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter / X 关键词屏蔽工具
 // @namespace    https://gist.github.com/livingfree2023/0280fc4517174563b0e5161c10a4ced8
-// @version      1.2.0
+// @version      1.3.0
 // @description  高效屏蔽包含指定关键词的帖子，支持统计、暂停、TXT 与网址导入导出
 // @author       livingfree
 // @license      MIT
@@ -19,6 +19,7 @@
     const KEYS = {
         keywords: 'twitter_blocked_keywords',
         enabled: 'twitter_blocker_enabled',
+        filterUserId: 'twitter_blocker_filter_user_id',
         floatingNotice: 'twitter_blocker_floating_notice',
         stats: 'twitter_blocker_stats_v1'
     };
@@ -70,11 +71,24 @@
         }
         return { keywords, blankCount, duplicateCount, invalidCount };
     };
+    const userIdFromHref = (href) => {
+        if (typeof href !== 'string') return '';
+        const match = href.match(/^\/([^/?#]+)\/?$/);
+        if (!match) return '';
+        try { return decodeURIComponent(match[1]); }
+        catch { return match[1]; }
+    };
 
     // Pure helpers are testable without a browser or userscript manager.
     if (typeof process !== 'undefined' && process.versions?.node
         && typeof module !== 'undefined' && module.exports) {
-        module.exports = { findBlockedKeyword, keyOf, normalizeKeywords, parseImportText };
+        module.exports = {
+            findBlockedKeyword,
+            keyOf,
+            normalizeKeywords,
+            parseImportText,
+            userIdFromHref
+        };
         return;
     }
 
@@ -94,6 +108,7 @@
     const state = {
         keywords: normalizeKeywords(Array.isArray(storedKeywords) ? storedKeywords : DEFAULTS),
         enabled: read(KEYS.enabled, true) !== false,
+        filterUserId: read(KEYS.filterUserId, false) === true,
         floatingNotice: read(KEYS.floatingNotice, true) !== false,
         total: Number.isSafeInteger(stats?.total) && stats.total >= 0 ? stats.total : 0,
         sessionPostIds: new Set(),
@@ -149,6 +164,14 @@
     const containerOf = (article) => article.closest('div[data-testid="cellInnerDiv"]') || article;
     const tweetText = (article) => Array.from(article.querySelectorAll('div[data-testid="tweetText"]'))
         .map((node) => node.innerText || node.textContent || '').join('\n');
+    const tweetAuthorId = (article) => {
+        const links = article.querySelectorAll('[data-testid="User-Name"] a[href]');
+        for (const link of links) {
+            const userId = userIdFromHref(link.getAttribute('href'));
+            if (userId) return userId;
+        }
+        return '';
+    };
     const restore = (article) => {
         const container = containerOf(article);
         if (container.dataset.txbHidden !== 'true') return;
@@ -160,10 +183,14 @@
     const scan = (article) => {
         if (!article?.isConnected) return;
         const text = tweetText(article);
-        const signature = `${state.enabled}|${state.revision}|${postId(article) || ''}|${text}`;
+        const authorId = tweetAuthorId(article);
+        const signature = `${state.enabled}|${state.revision}|${postId(article) || ''}|${authorId}|${text}`;
         if (cache.get(article) === signature) return;
         cache.set(article, signature);
-        const match = state.enabled ? findBlockedKeyword(text, state.keywords) : null;
+        const searchableText = state.filterUserId && authorId
+            ? `${text}\n@${authorId}\n${authorId}`
+            : text;
+        const match = state.enabled ? findBlockedKeyword(searchableText, state.keywords) : null;
         if (!match) return restore(article);
         const container = containerOf(article);
         container.dataset.txbHidden = 'true';
@@ -288,6 +315,10 @@
     const updateFloatingNoticeSetting = () => {
         ui.noticeToggle.setAttribute('aria-checked', String(state.floatingNotice));
         ui.noticeStatus.textContent = state.floatingNotice ? '已开启' : '已关闭';
+    };
+    const updateUserIdFilterSetting = () => {
+        ui.userIdToggle.setAttribute('aria-checked', String(state.filterUserId));
+        ui.userIdStatus.textContent = state.filterUserId ? '已开启' : '已关闭';
     };
     const renderList = () => {
         ui.list.replaceChildren();
@@ -463,10 +494,14 @@
         noticeCard.className = 'txb-card txb-card-wide';
         noticeCard.innerHTML = '<div><span class="txb-label">浮动拦截提示</span><strong id="txb-notice-status" class="txb-value"></strong></div><button id="txb-notice-toggle" class="txb-switch" type="button" role="switch" aria-label="显示浮动拦截提示"></button>';
         overlay.querySelector('.txb-status').appendChild(noticeCard);
+        const userIdCard = document.createElement('div');
+        userIdCard.className = 'txb-card txb-card-wide';
+        userIdCard.innerHTML = '<div><span class="txb-label">匹配用户 ID（@username）</span><strong id="txb-user-id-status" class="txb-value"></strong></div><button id="txb-user-id-toggle" class="txb-switch" type="button" role="switch" aria-label="在用户 ID 中匹配关键词"></button>';
+        overlay.querySelector('.txb-status').appendChild(userIdCard);
         document.body.appendChild(overlay);
         document.body.style.overflow = 'hidden';
         const $ = (selector) => overlay.querySelector(selector);
-        ui = { overlay, dialog: $('#txb-dialog'), input: $('#txb-input'), message: $('#txb-message'), list: $('#txb-list'), count: $('#txb-count'), toggle: $('#txb-toggle'), enabled: $('#txb-enabled'), total: $('#txb-total'), noticeToggle: $('#txb-notice-toggle'), noticeStatus: $('#txb-notice-status'), fileInput: $('#txb-file-input'), urlButton: $('#txb-url'), urlForm: $('#txb-url-form'), urlInput: $('#txb-url-input'), urlSubmit: $('#txb-url-submit'), preview: $('#txb-preview') };
+        ui = { overlay, dialog: $('#txb-dialog'), input: $('#txb-input'), message: $('#txb-message'), list: $('#txb-list'), count: $('#txb-count'), toggle: $('#txb-toggle'), enabled: $('#txb-enabled'), total: $('#txb-total'), noticeToggle: $('#txb-notice-toggle'), noticeStatus: $('#txb-notice-status'), userIdToggle: $('#txb-user-id-toggle'), userIdStatus: $('#txb-user-id-status'), fileInput: $('#txb-file-input'), urlButton: $('#txb-url'), urlForm: $('#txb-url-form'), urlInput: $('#txb-url-input'), urlSubmit: $('#txb-url-submit'), preview: $('#txb-preview') };
         $('#txb-close').onclick = closeModal;
         overlay.onclick = (event) => { if (event.target === overlay) closeModal(); };
         overlay.onkeydown = dialogKeys;
@@ -479,13 +514,20 @@
             updateFloatingNoticeSetting();
             notify(state.floatingNotice ? '浮动拦截提示已开启。' : '浮动拦截提示已关闭。', 'success');
         };
+        ui.userIdToggle.onclick = () => {
+            state.filterUserId = !state.filterUserId;
+            write(KEYS.filterUserId, state.filterUserId);
+            updateUserIdFilterSetting();
+            reapply();
+            notify(state.filterUserId ? '用户 ID 关键词过滤已开启。' : '用户 ID 关键词过滤已关闭。', 'success');
+        };
         $('#txb-reset').onclick = resetCounter;
         $('#txb-export').onclick = exportTxt;
         $('#txb-file').onclick = () => ui.fileInput.click();
         ui.fileInput.onchange = () => { importFile(ui.fileInput.files?.[0]); ui.fileInput.value = ''; };
         ui.urlButton.onclick = () => { ui.urlForm.hidden = !ui.urlForm.hidden; ui.urlButton.setAttribute('aria-expanded', String(!ui.urlForm.hidden)); if (!ui.urlForm.hidden) ui.urlInput.focus(); };
         ui.urlForm.onsubmit = (event) => { event.preventDefault(); importUrl(ui.urlInput.value.trim()); };
-        updateEnabled(); updateFloatingNoticeSetting(); updateStats(); renderList();
+        updateEnabled(); updateFloatingNoticeSetting(); updateUserIdFilterSetting(); updateStats(); renderList();
         requestAnimationFrame(() => ui?.input.focus());
     };
 

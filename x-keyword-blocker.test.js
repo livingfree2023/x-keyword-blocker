@@ -5,7 +5,8 @@ const {
     findBlockedKeyword,
     keyOf,
     normalizeKeywords,
-    parseImportText
+    parseImportText,
+    userIdFromHref
 } = require('./x-keyword-blocker.js');
 
 test('matching ignores case and normalizes full-width characters', () => {
@@ -33,4 +34,11 @@ test('TXT import reports blank, duplicate, and invalid lines', () => {
     assert.equal(result.blankCount, 1);
     assert.equal(result.duplicateCount, 1);
     assert.equal(result.invalidCount, 1);
+});
+
+test('user ID extraction accepts profile links but not post links', () => {
+    assert.equal(userIdFromHref('/livingfree2023'), 'livingfree2023');
+    assert.equal(userIdFromHref('/livingfree2023/'), 'livingfree2023');
+    assert.equal(userIdFromHref('/livingfree2023/status/123'), '');
+    assert.equal(userIdFromHref('https://x.com/livingfree2023'), '');
 });
