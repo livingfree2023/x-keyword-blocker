@@ -4,6 +4,6 @@
   "private": true,
   "scripts": {
     "check": "node --check x-keyword-blocker.js",
-    "test": "node --test"
+    "test": "node --test x-keyword-blocker.test.js"
   }
 }

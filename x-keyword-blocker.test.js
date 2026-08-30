@@ -6,7 +6,7 @@ const {
     keyOf,
     normalizeKeywords,
     parseImportText
-} = require('../x-keyword-blocker.js');
+} = require('./x-keyword-blocker.js');
 
 test('matching ignores case and normalizes full-width characters', () => {
     assert.equal(findBlockedKeyword('A new CRYPTO project', ['crypto']), 'crypto');
