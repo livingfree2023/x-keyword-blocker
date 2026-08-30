@@ -12,6 +12,7 @@ A lightweight, dependency-free Tampermonkey / Violentmonkey userscript that hide
 - Persistent lifetime block counter with an optional `+N` notification
 - Import from local TXT files or HTTPS URLs and export to TXT
 - Pause filtering, clear all keywords, and use responsive light/dark UI
+- Chinese and English UI, with automatic browser-language detection
 
 ## Installation
 
@@ -29,6 +30,8 @@ Open “管理屏蔽关键词” (“Manage blocked keywords”) from your users
 - macOS: `Option + Shift + K`
 
 Use the userscript menu if the browser or input method intercepts the shortcut.
+
+Use the Language setting in the panel to select Auto, 中文, or English. The panel reopens immediately after a change.
 
 | Setting | Default | Description |
 | --- | --- | --- |

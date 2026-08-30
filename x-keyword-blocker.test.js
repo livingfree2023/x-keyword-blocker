@@ -11,7 +11,9 @@ const {
     isPromotedLabelText,
     resolveBlockedMatch,
     responseHeader,
-    remoteImportErrorMessage
+    remoteImportErrorMessage,
+    resolveLocale,
+    translate
 } = require('./x-keyword-blocker.js');
 
 test('matching ignores case and normalizes full-width characters', () => {
@@ -74,4 +76,12 @@ test('remote import helpers parse headers and report specific failures', () => {
     assert.equal(responseHeader(headers, 'missing'), '');
     assert.equal(remoteImportErrorMessage({ code: 'timeout' }), '读取超时，请稍后重试。');
     assert.equal(remoteImportErrorMessage({ code: 'http', status: 404 }), '服务器返回 HTTP 404，无法读取文件。');
+});
+
+test('interface language follows the saved preference or browser language', () => {
+    assert.equal(resolveLocale('auto', 'zh-TW'), 'zh-CN');
+    assert.equal(resolveLocale('auto', 'en-US'), 'en');
+    assert.equal(resolveLocale('en', 'zh-CN'), 'en');
+    assert.equal(translate('en', 'added_keyword', { keyword: 'crypto' }), 'Added “crypto”');
+    assert.equal(translate('zh-CN', 'clear', {}), '清空');
 });

@@ -1,8 +1,10 @@
 // ==UserScript==
 // @name         Twitter / X 关键词屏蔽工具
+// @name:en      X Keyword Blocker
 // @namespace    https://github.com/livingfree2023/x-keyword-blocker
-// @version      1.4.1
+// @version      1.5.0
 // @description  屏蔽指定关键词与推广帖子，支持统计、暂停、TXT 与网址导入导出
+// @description:en Block posts by keyword and promoted-post labels, with stats and TXT/URL import/export
 // @author       livingfree
 // @license      MIT
 // @match        https://twitter.com/*
@@ -21,6 +23,7 @@
     const KEYS = {
         keywords: 'twitter_blocked_keywords',
         enabled: 'twitter_blocker_enabled',
+        language: 'twitter_blocker_language',
         blockPromoted: 'twitter_blocker_block_promoted',
         filterUserId: 'twitter_blocker_filter_user_id',
         floatingNotice: 'twitter_blocker_floating_notice',
@@ -30,6 +33,82 @@
     const MAX_KEYWORDS = 2000;
     const MAX_LENGTH = 100;
     const MAX_FILE_BYTES = 512 * 1024;
+    const TEXT = {
+        'zh-CN': {
+            active: '运行中', paused: '已暂停', on: '已开启', off: '已关闭',
+            remote_timeout: '读取超时，请稍后重试。',
+            remote_too_large: '远程文件过大，请使用不超过 512 KB 的文本文件。',
+            remote_insecure_redirect: '网址重定向到了非 HTTPS 地址，已停止读取。',
+            remote_http: '服务器返回 HTTP {status}，无法读取文件。',
+            remote_network: '网络请求失败，请检查网址、网络连接或用户脚本的跨域权限。',
+            floating_aria: '累计拦截 {total} 条，本次新增 {delta} 条', floating_label: '累计拦截',
+            empty_title: '还没有屏蔽词', empty_description: '添加后会立即重新检查当前时间线。',
+            delete: '删除', delete_keyword_aria: '删除关键词 {keyword}', deleted_keyword: '已删除“{keyword}”',
+            enter_keyword: '请输入一个关键词。', keyword_too_long: '关键词不能超过 {max} 个字符。',
+            keyword_limit: '最多保存 {max} 个关键词。', keyword_exists: '“{keyword}”已经在列表中。',
+            added_keyword: '已添加“{keyword}”', no_export: '当前没有可导出的关键词。',
+            exported: '已导出 {count} 个关键词。', imported: '导入完成，当前共有 {count} 个关键词。',
+            no_valid_import: '没有找到可导入的有效关键词。', import_preview: '检查导入内容 · {source}',
+            import_summary: '识别到 {count} 个，其中 {newCount} 个尚未存在；忽略 {blankCount} 个空行、{duplicateCount} 个重复项、{invalidCount} 个无效项。',
+            import_warning: '替换会删除当前列表；合并只添加缺少的项目。', merge: '合并导入', replace: '替换现有', cancel: '取消',
+            local_file_too_large: '文件过大，请选择不超过 512 KB 的文本文件。', file_read_success: '文件读取成功，请确认导入方式。',
+            file_read_failed: '无法读取这个文件。', invalid_url: '请输入有效的 HTTPS 文本文件网址。', loading: '读取中…',
+            url_read_success: '网址读取成功，请确认导入方式。', read: '读取', reset_confirm: '将累计拦截数清零？关键词和过滤设置不会受影响。',
+            reset_success: '累计拦截数已清零。', clear_none: '当前没有可清空的屏蔽词。',
+            clear_confirm: '确认删除全部 {count} 个屏蔽词？此操作无法撤销。', clear_success: '已删除全部 {count} 个屏蔽词。',
+            title: '关键词屏蔽', description: '管理时间线过滤规则与导入导出。', close: '关闭',
+            filter_status: '过滤状态', filter_toggle_aria: '启用帖子过滤', total_blocked: '累计拦截', reset: '清零', posts_unit: ' 条',
+            new_keyword: '新关键词', keyword_placeholder: '输入要屏蔽的关键词…', add: '添加',
+            input_hint: '每行一个关键词，匹配时不区分大小写。', import_file: '从文件导入', import_url: '从网址导入', export_txt: '导出 TXT',
+            url_label: 'HTTPS 文本网址', preview_aria: '导入预览', blocked_words: '屏蔽词',
+            shortcut_footer: '快捷键 Alt + Shift + K · 设置仅保存在当前浏览器',
+            floating_notice: '浮动拦截提示', floating_toggle_aria: '显示浮动拦截提示',
+            author_filter: '匹配作者名称与 ID', author_toggle_aria: '在作者显示名称和用户 ID 中匹配关键词',
+            block_promoted: '屏蔽广告', promoted_toggle_aria: '屏蔽带推广标记的帖子', clear: '清空', clear_keywords_aria: '删除全部屏蔽词',
+            filtering_enabled: '帖子过滤已启用。', filtering_paused: '过滤已暂停，帖子已恢复显示。',
+            floating_enabled: '浮动拦截提示已开启。', floating_disabled: '浮动拦截提示已关闭。',
+            author_enabled: '作者名称与 ID 过滤已开启。', author_disabled: '作者名称与 ID 过滤已关闭。',
+            promoted_enabled: '广告屏蔽已开启。', promoted_disabled: '广告屏蔽已关闭。',
+            language: '语言', language_aria: '选择界面语言', language_auto: '自动（跟随浏览器）', menu: '管理屏蔽关键词'
+        },
+        en: {
+            active: 'Active', paused: 'Paused', on: 'On', off: 'Off',
+            remote_timeout: 'The request timed out. Please try again.',
+            remote_too_large: 'The remote file is too large. Use a text file no larger than 512 KB.',
+            remote_insecure_redirect: 'The URL redirected to a non-HTTPS address, so it was not loaded.',
+            remote_http: 'The server returned HTTP {status}; the file could not be loaded.',
+            remote_network: 'The request failed. Check the URL, network connection, or userscript cross-origin permission.',
+            floating_aria: '{total} posts blocked in total; {delta} newly blocked', floating_label: 'Total blocked',
+            empty_title: 'No blocked keywords yet', empty_description: 'Add one to recheck the current timeline immediately.',
+            delete: 'Delete', delete_keyword_aria: 'Delete keyword {keyword}', deleted_keyword: 'Deleted “{keyword}”',
+            enter_keyword: 'Enter a keyword.', keyword_too_long: 'A keyword cannot exceed {max} characters.',
+            keyword_limit: 'You can save up to {max} keywords.', keyword_exists: '“{keyword}” is already in the list.',
+            added_keyword: 'Added “{keyword}”', no_export: 'There are no keywords to export.',
+            exported: 'Exported {count} keywords.', imported: 'Import complete. There are now {count} keywords.',
+            no_valid_import: 'No valid keywords were found to import.', import_preview: 'Review import · {source}',
+            import_summary: '{count} found; {newCount} are new. Ignored {blankCount} blank, {duplicateCount} duplicate, and {invalidCount} invalid entries.',
+            import_warning: 'Replace removes the current list; merge only adds missing entries.', merge: 'Merge import', replace: 'Replace current', cancel: 'Cancel',
+            local_file_too_large: 'The file is too large. Choose a text file no larger than 512 KB.', file_read_success: 'File read. Choose how to import it.',
+            file_read_failed: 'Unable to read this file.', invalid_url: 'Enter a valid HTTPS text-file URL.', loading: 'Loading…',
+            url_read_success: 'URL read. Choose how to import it.', read: 'Load', reset_confirm: 'Reset the lifetime block count? Keywords and settings will not change.',
+            reset_success: 'Lifetime block count reset.', clear_none: 'There are no blocked keywords to clear.',
+            clear_confirm: 'Delete all {count} blocked keywords? This cannot be undone.', clear_success: 'Deleted all {count} blocked keywords.',
+            title: 'Keyword Blocker', description: 'Manage timeline filters and imports.', close: 'Close',
+            filter_status: 'Filtering', filter_toggle_aria: 'Toggle post filtering', total_blocked: 'Total blocked', reset: 'Reset', posts_unit: ' posts',
+            new_keyword: 'New keyword', keyword_placeholder: 'Enter a keyword to block…', add: 'Add',
+            input_hint: 'One keyword per line. Matching is case-insensitive.', import_file: 'Import file', import_url: 'Import URL', export_txt: 'Export TXT',
+            url_label: 'HTTPS text-file URL', preview_aria: 'Import preview', blocked_words: 'Blocked keywords',
+            shortcut_footer: 'Shortcut: Alt + Shift + K · Settings stay in this browser',
+            floating_notice: 'Floating notification', floating_toggle_aria: 'Toggle floating block notification',
+            author_filter: 'Match author name and ID', author_toggle_aria: 'Match keywords in author display names and user IDs',
+            block_promoted: 'Block promoted posts', promoted_toggle_aria: 'Block posts marked as promoted', clear: 'Clear', clear_keywords_aria: 'Delete all blocked keywords',
+            filtering_enabled: 'Post filtering enabled.', filtering_paused: 'Filtering paused. Posts have been restored.',
+            floating_enabled: 'Floating notification enabled.', floating_disabled: 'Floating notification disabled.',
+            author_enabled: 'Author name and ID matching enabled.', author_disabled: 'Author name and ID matching disabled.',
+            promoted_enabled: 'Promoted-post blocking enabled.', promoted_disabled: 'Promoted-post blocking disabled.',
+            language: 'Language', language_aria: 'Choose interface language', language_auto: 'Auto (browser language)', menu: 'Manage blocked keywords'
+        }
+    };
     const PROMOTED_LABELS = new Set([
         'ad', 'promoted', 'sponsored',
         '广告', '廣告', '推广', '推廣', '赞助', '贊助',
@@ -107,12 +186,20 @@
         }
         return '';
     };
-    const remoteImportErrorMessage = (error) => {
-        if (error?.code === 'timeout') return '读取超时，请稍后重试。';
-        if (error?.code === 'too_large') return '远程文件过大，请使用不超过 512 KB 的文本文件。';
-        if (error?.code === 'insecure_redirect') return '网址重定向到了非 HTTPS 地址，已停止读取。';
-        if (error?.code === 'http') return `服务器返回 HTTP ${error.status || '错误'}，无法读取文件。`;
-        return '网络请求失败，请检查网址、网络连接或用户脚本的跨域权限。';
+    const resolveLocale = (language = 'auto', browserLanguage = '') => {
+        if (language === 'zh-CN' || language === 'en') return language;
+        return String(browserLanguage).toLowerCase().startsWith('zh') ? 'zh-CN' : 'en';
+    };
+    const translate = (locale, key, values = {}) => {
+        const template = TEXT[locale]?.[key] ?? TEXT.en[key] ?? key;
+        return template.replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? `{${name}}`));
+    };
+    const remoteImportErrorMessage = (error, locale = 'zh-CN') => {
+        if (error?.code === 'timeout') return translate(locale, 'remote_timeout');
+        if (error?.code === 'too_large') return translate(locale, 'remote_too_large');
+        if (error?.code === 'insecure_redirect') return translate(locale, 'remote_insecure_redirect');
+        if (error?.code === 'http') return translate(locale, 'remote_http', { status: error.status || 'error' });
+        return translate(locale, 'remote_network');
     };
 
     // Pure helpers are testable without a browser or userscript manager.
@@ -128,7 +215,9 @@
             isPromotedLabelText,
             resolveBlockedMatch,
             responseHeader,
-            remoteImportErrorMessage
+            remoteImportErrorMessage,
+            resolveLocale,
+            translate
         };
         return;
     }
@@ -149,6 +238,7 @@
     const state = {
         keywords: normalizeKeywords(Array.isArray(storedKeywords) ? storedKeywords : DEFAULTS),
         enabled: read(KEYS.enabled, true) !== false,
+        language: read(KEYS.language, 'auto'),
         blockPromoted: read(KEYS.blockPromoted, true) !== false,
         filterUserId: read(KEYS.filterUserId, false) === true,
         floatingNotice: read(KEYS.floatingNotice, true) !== false,
@@ -168,6 +258,9 @@
     let ui = null;
     let previousFocus = null;
     let previousOverflow = '';
+    const locale = () => resolveLocale(state.language, navigator.language);
+    const t = (key, values) => translate(locale(), key, values);
+    const formatNumber = (value) => new Intl.NumberFormat(locale()).format(value);
     const saveKeywords = () => write(KEYS.keywords, [...state.keywords]);
     const saveStats = () => {
         if (state.statsTimer !== null) clearTimeout(state.statsTimer);
@@ -187,7 +280,7 @@
         return null;
     };
     const updateStats = () => {
-        if (ui) ui.total.textContent = state.total.toLocaleString();
+        if (ui) ui.total.textContent = formatNumber(state.total);
     };
     const countPost = (article) => {
         const id = postId(article);
@@ -307,6 +400,7 @@
         style.textContent += `
 #txb-floating-counter{--txb-float-bg:rgba(255,255,255,.96);--txb-float-text:#0f1419;--txb-float-muted:#536471;position:fixed;left:50%;bottom:32px;z-index:2147483645;display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid rgba(15,20,25,.12);border-radius:999px;color:var(--txb-float-text);background:var(--txb-float-bg);box-shadow:0 8px 28px rgba(0,0,0,.22);pointer-events:none;font-family:TwitterChirp,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:txbFloatNotice 1s cubic-bezier(.2,.8,.2,1) both;backdrop-filter:blur(10px)}#txb-floating-counter[data-theme=dark]{--txb-float-bg:rgba(21,32,43,.96);--txb-float-text:#f7f9f9;--txb-float-muted:#8b98a5;border-color:rgba(255,255,255,.14)}.txb-floating-label{color:var(--txb-float-muted);font-size:12px;font-weight:650}.txb-floating-total{font-size:16px;font-weight:800}.txb-floating-delta{padding:3px 8px;border-radius:999px;color:#007a51;background:rgba(0,186,124,.14);font-size:13px;font-weight:850}@keyframes txbFloatNotice{0%{opacity:0;transform:translate(-50%,12px) scale(.96)}14%,78%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-7px) scale(.98)}}.txb-card-wide{grid-column:1/-1;min-height:60px}.txb-compact-settings{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.txb-compact-settings .txb-card{min-width:0;min-height:66px;padding:10px}.txb-compact-settings .txb-value{font-size:15px}.txb-heading-actions{display:flex;align-items:center;gap:6px}.txb-clear-keywords{padding:2px 7px;border:0;border-radius:99px;color:var(--danger);background:transparent;font:inherit;font-size:11px;font-weight:700;cursor:pointer}.txb-clear-keywords:hover{background:rgba(244,33,46,.1)}@media(max-width:520px){#txb-floating-counter{bottom:82px;max-width:calc(100vw - 24px)}.txb-compact-settings{gap:8px}.txb-compact-settings .txb-card{padding:9px}}@media(prefers-reduced-motion:reduce){#txb-floating-counter{animation:none}}
         `;
+        style.textContent += `.txb-select{min-width:142px;height:34px;padding:0 28px 0 10px;border:1px solid var(--border);border-radius:10px;outline:0;color:var(--text);background:var(--bg);font:inherit;font-size:13px;cursor:pointer}.txb-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--focus)}`;
         document.head.appendChild(style);
     };
     const darkPage = () => {
@@ -344,17 +438,17 @@
         counter.dataset.delta = String(delta);
         counter.setAttribute('role', 'status');
         counter.setAttribute('aria-live', 'polite');
-        counter.setAttribute('aria-label', `累计拦截 ${state.total} 条，本次新增 ${delta} 条`);
+        counter.setAttribute('aria-label', t('floating_aria', { total: formatNumber(state.total), delta: formatNumber(delta) }));
 
         const label = document.createElement('span');
         label.className = 'txb-floating-label';
-        label.textContent = '累计拦截';
+        label.textContent = t('floating_label');
         const total = document.createElement('strong');
         total.className = 'txb-floating-total';
-        total.textContent = state.total.toLocaleString();
+        total.textContent = formatNumber(state.total);
         const change = document.createElement('strong');
         change.className = 'txb-floating-delta';
-        change.textContent = `+${delta.toLocaleString()}`;
+        change.textContent = `+${formatNumber(delta)}`;
         counter.append(label, total, change);
         document.body.appendChild(counter);
 
@@ -376,28 +470,28 @@
     };
     const updateEnabled = () => {
         ui.toggle.setAttribute('aria-checked', String(state.enabled));
-        ui.enabled.textContent = state.enabled ? '运行中' : '已暂停';
+        ui.enabled.textContent = state.enabled ? t('active') : t('paused');
     };
     const updateFloatingNoticeSetting = () => {
         ui.noticeToggle.setAttribute('aria-checked', String(state.floatingNotice));
-        ui.noticeStatus.textContent = state.floatingNotice ? '已开启' : '已关闭';
+        ui.noticeStatus.textContent = state.floatingNotice ? t('on') : t('off');
     };
     const updateUserIdFilterSetting = () => {
         ui.userIdToggle.setAttribute('aria-checked', String(state.filterUserId));
-        ui.userIdStatus.textContent = state.filterUserId ? '已开启' : '已关闭';
+        ui.userIdStatus.textContent = state.filterUserId ? t('on') : t('off');
     };
     const updatePromotedSetting = () => {
         ui.promotedToggle.setAttribute('aria-checked', String(state.blockPromoted));
-        ui.promotedStatus.textContent = state.blockPromoted ? '已开启' : '已关闭';
+        ui.promotedStatus.textContent = state.blockPromoted ? t('on') : t('off');
     };
     const renderList = () => {
         ui.list.replaceChildren();
-        ui.count.textContent = state.keywords.length.toLocaleString();
+        ui.count.textContent = formatNumber(state.keywords.length);
         ui.clearKeywords.disabled = state.keywords.length === 0;
         if (!state.keywords.length) {
             const empty = document.createElement('div');
             empty.className = 'txb-empty';
-            empty.innerHTML = '<strong>还没有屏蔽词</strong><span>添加后会立即重新检查当前时间线。</span>';
+            empty.innerHTML = `<strong>${t('empty_title')}</strong><span>${t('empty_description')}</span>`;
             ui.list.appendChild(empty);
             return;
         }
@@ -410,14 +504,14 @@
             const remove = document.createElement('button');
             remove.type = 'button';
             remove.className = 'txb-remove';
-            remove.textContent = '删除';
-            remove.setAttribute('aria-label', `删除关键词 ${keyword}`);
+            remove.textContent = t('delete');
+            remove.setAttribute('aria-label', t('delete_keyword_aria', { keyword }));
             remove.onclick = () => {
                 state.keywords = state.keywords.filter((item) => keyOf(item) !== keyOf(keyword));
                 saveKeywords();
                 renderList();
                 reapply();
-                notify(`已删除“${keyword}”`, 'success');
+                notify(t('deleted_keyword', { keyword }), 'success');
             };
             row.append(word, remove);
             ui.list.appendChild(row);
@@ -425,21 +519,21 @@
     };
     const addKeyword = (value) => {
         const keyword = clean(value);
-        if (!keyword) return notify('请输入一个关键词。', 'error'), false;
-        if (keyword.length > MAX_LENGTH) return notify(`关键词不能超过 ${MAX_LENGTH} 个字符。`, 'error'), false;
-        if (state.keywords.length >= MAX_KEYWORDS) return notify(`最多保存 ${MAX_KEYWORDS} 个关键词。`, 'error'), false;
+        if (!keyword) return notify(t('enter_keyword'), 'error'), false;
+        if (keyword.length > MAX_LENGTH) return notify(t('keyword_too_long', { max: MAX_LENGTH }), 'error'), false;
+        if (state.keywords.length >= MAX_KEYWORDS) return notify(t('keyword_limit', { max: formatNumber(MAX_KEYWORDS) }), 'error'), false;
         if (state.keywords.some((item) => keyOf(item) === keyOf(keyword))) {
-            return notify(`“${keyword}”已经在列表中。`, 'error'), false;
+            return notify(t('keyword_exists', { keyword }), 'error'), false;
         }
         state.keywords.push(keyword);
         saveKeywords();
         renderList();
         reapply();
-        notify(`已添加“${keyword}”`, 'success');
+        notify(t('added_keyword', { keyword }), 'success');
         return true;
     };
     const exportTxt = () => {
-        if (!state.keywords.length) return notify('当前没有可导出的关键词。', 'error');
+        if (!state.keywords.length) return notify(t('no_export'), 'error');
         const url = URL.createObjectURL(new Blob([`${state.keywords.join('\n')}\n`], { type: 'text/plain;charset=utf-8' }));
         const link = document.createElement('a');
         link.href = url;
@@ -448,7 +542,7 @@
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 0);
-        notify(`已导出 ${state.keywords.length} 个关键词。`, 'success');
+        notify(t('exported', { count: formatNumber(state.keywords.length) }), 'success');
     };
     const hidePreview = () => {
         ui.preview.hidden = true;
@@ -460,45 +554,45 @@
         renderList();
         hidePreview();
         reapply();
-        notify(`导入完成，当前共有 ${state.keywords.length} 个关键词。`, 'success');
+        notify(t('imported', { count: formatNumber(state.keywords.length) }), 'success');
     };
     const previewImport = (text, source) => {
         if (!ui) return;
         const result = parseImportText(text);
-        if (!result.keywords.length) return hidePreview(), notify('没有找到可导入的有效关键词。', 'error');
+        if (!result.keywords.length) return hidePreview(), notify(t('no_valid_import'), 'error');
         const existing = new Set(state.keywords.map(keyOf));
         const newCount = result.keywords.filter((word) => !existing.has(keyOf(word))).length;
         ui.preview.replaceChildren();
         ui.preview.hidden = false;
         const title = document.createElement('h3');
-        title.textContent = `检查导入内容 · ${source}`;
+        title.textContent = t('import_preview', { source });
         const summary = document.createElement('p');
-        summary.textContent = `识别到 ${result.keywords.length} 个，其中 ${newCount} 个尚未存在；忽略 ${result.blankCount} 个空行、${result.duplicateCount} 个重复项、${result.invalidCount} 个无效项。`;
+        summary.textContent = t('import_summary', { count: formatNumber(result.keywords.length), newCount: formatNumber(newCount), blankCount: formatNumber(result.blankCount), duplicateCount: formatNumber(result.duplicateCount), invalidCount: formatNumber(result.invalidCount) });
         const warning = document.createElement('p');
-        warning.textContent = '替换会删除当前列表；合并只添加缺少的项目。';
+        warning.textContent = t('import_warning');
         const actions = document.createElement('div');
         actions.className = 'txb-preview-actions';
-        [['合并导入', 'txb-primary', false], ['替换现有', 'txb-danger', true]].forEach(([label, className, replace]) => {
+        [[t('merge'), 'txb-primary', false], [t('replace'), 'txb-danger', true]].forEach(([label, className, replace]) => {
             const button = document.createElement('button');
             button.type = 'button'; button.className = className; button.textContent = label;
             button.onclick = () => applyImport(result.keywords, replace);
             actions.appendChild(button);
         });
         const cancel = document.createElement('button');
-        cancel.type = 'button'; cancel.className = 'txb-secondary'; cancel.textContent = '取消'; cancel.onclick = hidePreview;
+        cancel.type = 'button'; cancel.className = 'txb-secondary'; cancel.textContent = t('cancel'); cancel.onclick = hidePreview;
         actions.appendChild(cancel);
         ui.preview.append(title, summary, warning, actions);
         actions.firstElementChild.focus();
     };
     const importFile = async (file) => {
         if (!file) return;
-        if (file.size > MAX_FILE_BYTES) return notify('文件过大，请选择不超过 512 KB 的文本文件。', 'error');
+        if (file.size > MAX_FILE_BYTES) return notify(t('local_file_too_large'), 'error');
         try {
             previewImport(await file.text(), file.name);
-            notify('文件读取成功，请确认导入方式。');
+            notify(t('file_read_success'));
         } catch (error) {
             console.warn('[X Keyword Blocker] 文件导入失败', error);
-            notify('无法读取这个文件。', 'error');
+            notify(t('file_read_failed'), 'error');
         }
     };
     const remoteError = (code, details = {}) => Object.assign(new Error(code), { code, ...details });
@@ -555,38 +649,38 @@
         try {
             url = new URL(value);
             if (url.protocol !== 'https:') throw new Error('HTTPS required');
-        } catch { return notify('请输入有效的 HTTPS 文本文件网址。', 'error'); }
+        } catch { return notify(t('invalid_url'), 'error'); }
         const submitButton = ui.urlSubmit;
         submitButton.disabled = true;
-        submitButton.textContent = '读取中…';
+        submitButton.textContent = t('loading');
         try {
             const result = await requestRemoteText(url);
             previewImport(result.text, result.finalUrl.hostname);
-            notify('网址读取成功，请确认导入方式。');
+            notify(t('url_read_success'));
         } catch (error) {
             console.warn('[X Keyword Blocker] 网址导入失败', error);
-            notify(remoteImportErrorMessage(error), 'error');
+            notify(remoteImportErrorMessage(error, locale()), 'error');
         } finally {
             if (submitButton.isConnected) {
                 submitButton.disabled = false;
-                submitButton.textContent = '读取';
+                submitButton.textContent = t('read');
             }
         }
     };
     const resetCounter = () => {
-        if (!confirm('将累计拦截数清零？关键词和过滤设置不会受影响。')) return;
+        if (!confirm(t('reset_confirm'))) return;
         state.total = 0;
-        saveStats(); updateStats(); notify('累计拦截数已清零。', 'success');
+        saveStats(); updateStats(); notify(t('reset_success'), 'success');
     };
     const clearAllKeywords = () => {
         const count = state.keywords.length;
-        if (!count) return notify('当前没有可清空的屏蔽词。', 'error');
-        if (!confirm(`确认删除全部 ${count.toLocaleString()} 个屏蔽词？此操作无法撤销。`)) return;
+        if (!count) return notify(t('clear_none'), 'error');
+        if (!confirm(t('clear_confirm', { count: formatNumber(count) }))) return;
         state.keywords = [];
         saveKeywords();
         renderList();
         reapply();
-        notify(`已删除全部 ${count.toLocaleString()} 个屏蔽词。`, 'success');
+        notify(t('clear_success', { count: formatNumber(count) }), 'success');
     };
     const closeModal = () => {
         document.getElementById('txb-overlay')?.remove();
@@ -597,7 +691,7 @@
     const dialogKeys = (event) => {
         if (event.key === 'Escape') return event.preventDefault(), closeModal();
         if (event.key !== 'Tab') return;
-        const items = [...ui.dialog.querySelectorAll('button:not([disabled]),input:not([disabled])')]
+        const items = [...ui.dialog.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled])')]
             .filter((item) => !item.closest('[hidden]'));
         const first = items[0], last = items.at(-1);
         if (event.shiftKey && document.activeElement === first) event.preventDefault(), last.focus();
@@ -611,19 +705,24 @@
         const overlay = document.createElement('div');
         overlay.id = 'txb-overlay';
         overlay.dataset.theme = darkPage() ? 'dark' : 'light';
-        overlay.innerHTML = `<section id="txb-dialog" role="dialog" aria-modal="true" aria-labelledby="txb-title" aria-describedby="txb-description"><header class="txb-header"><div><p class="txb-eyebrow">X Keyword Blocker</p><h1 id="txb-title">关键词屏蔽</h1><p id="txb-description" class="txb-subtitle">管理时间线过滤规则与导入导出。</p></div><button id="txb-close" class="txb-icon" type="button" aria-label="关闭">×</button></header><div class="txb-content"><div class="txb-status"><div class="txb-card"><div><span class="txb-label">过滤状态</span><strong id="txb-enabled" class="txb-value"></strong></div><button id="txb-toggle" class="txb-switch" type="button" role="switch" aria-label="启用帖子过滤"></button></div><div class="txb-card"><div><span class="txb-label">累计拦截</span><strong class="txb-value"><span id="txb-total">0</span> 条</strong></div><button id="txb-reset" type="button">清零</button></div></div><form id="txb-add" class="txb-form"><label class="txb-sr" for="txb-input">新关键词</label><input id="txb-input" class="txb-input" maxlength="${MAX_LENGTH}" autocomplete="off" placeholder="输入要屏蔽的关键词…"><button class="txb-primary" type="submit">添加</button></form><p id="txb-message" role="status" aria-live="polite">每行一个关键词，匹配时不区分大小写。</p><div class="txb-tools"><button id="txb-file" class="txb-secondary" type="button">从文件导入</button><button id="txb-url" class="txb-secondary" type="button" aria-expanded="false">从网址导入</button><button id="txb-export" class="txb-secondary" type="button">导出 TXT</button><input id="txb-file-input" class="txb-sr" type="file" accept=".txt,text/plain"></div><form id="txb-url-form" hidden><label class="txb-sr" for="txb-url-input">HTTPS 文本网址</label><input id="txb-url-input" class="txb-input" type="url" placeholder="https://example.com/keywords.txt"><button id="txb-url-submit" class="txb-primary">读取</button></form><section id="txb-preview" class="txb-preview" aria-label="导入预览" hidden></section><div class="txb-heading"><h2>屏蔽词</h2><span id="txb-count" class="txb-count">0</span></div><div id="txb-list" class="txb-list"></div></div><footer class="txb-footer">快捷键 Alt + Shift + K · 设置仅保存在当前浏览器</footer></section>`;
+        overlay.innerHTML = `<section id="txb-dialog" role="dialog" aria-modal="true" aria-labelledby="txb-title" aria-describedby="txb-description"><header class="txb-header"><div><p class="txb-eyebrow">X Keyword Blocker</p><h1 id="txb-title">${t('title')}</h1><p id="txb-description" class="txb-subtitle">${t('description')}</p></div><button id="txb-close" class="txb-icon" type="button" aria-label="${t('close')}">×</button></header><div class="txb-content"><div class="txb-status"><div class="txb-card"><div><span class="txb-label">${t('filter_status')}</span><strong id="txb-enabled" class="txb-value"></strong></div><button id="txb-toggle" class="txb-switch" type="button" role="switch" aria-label="${t('filter_toggle_aria')}"></button></div><div class="txb-card"><div><span class="txb-label">${t('total_blocked')}</span><strong class="txb-value"><span id="txb-total">0</span>${t('posts_unit')}</strong></div><button id="txb-reset" type="button">${t('reset')}</button></div></div><form id="txb-add" class="txb-form"><label class="txb-sr" for="txb-input">${t('new_keyword')}</label><input id="txb-input" class="txb-input" maxlength="${MAX_LENGTH}" autocomplete="off" placeholder="${t('keyword_placeholder')}"><button class="txb-primary" type="submit">${t('add')}</button></form><p id="txb-message" role="status" aria-live="polite">${t('input_hint')}</p><div class="txb-tools"><button id="txb-file" class="txb-secondary" type="button">${t('import_file')}</button><button id="txb-url" class="txb-secondary" type="button" aria-expanded="false">${t('import_url')}</button><button id="txb-export" class="txb-secondary" type="button">${t('export_txt')}</button><input id="txb-file-input" class="txb-sr" type="file" accept=".txt,text/plain"></div><form id="txb-url-form" hidden><label class="txb-sr" for="txb-url-input">${t('url_label')}</label><input id="txb-url-input" class="txb-input" type="url" placeholder="https://example.com/keywords.txt"><button id="txb-url-submit" class="txb-primary">${t('read')}</button></form><section id="txb-preview" class="txb-preview" aria-label="${t('preview_aria')}" hidden></section><div class="txb-heading"><h2>${t('blocked_words')}</h2><span id="txb-count" class="txb-count">0</span></div><div id="txb-list" class="txb-list"></div></div><footer class="txb-footer">${t('shortcut_footer')}</footer></section>`;
         const noticeCard = document.createElement('div');
         noticeCard.className = 'txb-card txb-card-wide';
-        noticeCard.innerHTML = '<div><span class="txb-label">浮动拦截提示</span><strong id="txb-notice-status" class="txb-value"></strong></div><button id="txb-notice-toggle" class="txb-switch" type="button" role="switch" aria-label="显示浮动拦截提示"></button>';
+        noticeCard.innerHTML = `<div><span class="txb-label">${t('floating_notice')}</span><strong id="txb-notice-status" class="txb-value"></strong></div><button id="txb-notice-toggle" class="txb-switch" type="button" role="switch" aria-label="${t('floating_toggle_aria')}"></button>`;
         overlay.querySelector('.txb-status').appendChild(noticeCard);
+        const languageCard = document.createElement('div');
+        languageCard.className = 'txb-card txb-card-wide';
+        languageCard.innerHTML = `<label class="txb-label" for="txb-language">${t('language')}</label><select id="txb-language" class="txb-select" aria-label="${t('language_aria')}"><option value="auto">${t('language_auto')}</option><option value="zh-CN">中文</option><option value="en">English</option></select>`;
+        languageCard.querySelector('#txb-language').value = ['auto', 'zh-CN', 'en'].includes(state.language) ? state.language : 'auto';
+        overlay.querySelector('.txb-status').appendChild(languageCard);
         const compactSettings = document.createElement('div');
         compactSettings.className = 'txb-compact-settings';
         const userIdCard = document.createElement('div');
         userIdCard.className = 'txb-card';
-        userIdCard.innerHTML = '<div><span class="txb-label">匹配作者名称与 ID</span><strong id="txb-user-id-status" class="txb-value"></strong></div><button id="txb-user-id-toggle" class="txb-switch" type="button" role="switch" aria-label="在作者显示名称和用户 ID 中匹配关键词"></button>';
+        userIdCard.innerHTML = `<div><span class="txb-label">${t('author_filter')}</span><strong id="txb-user-id-status" class="txb-value"></strong></div><button id="txb-user-id-toggle" class="txb-switch" type="button" role="switch" aria-label="${t('author_toggle_aria')}"></button>`;
         const promotedCard = document.createElement('div');
         promotedCard.className = 'txb-card';
-        promotedCard.innerHTML = '<div><span class="txb-label">屏蔽广告</span><strong id="txb-promoted-status" class="txb-value"></strong></div><button id="txb-promoted-toggle" class="txb-switch" type="button" role="switch" aria-label="屏蔽带推广标记的帖子"></button>';
+        promotedCard.innerHTML = `<div><span class="txb-label">${t('block_promoted')}</span><strong id="txb-promoted-status" class="txb-value"></strong></div><button id="txb-promoted-toggle" class="txb-switch" type="button" role="switch" aria-label="${t('promoted_toggle_aria')}"></button>`;
         compactSettings.append(userIdCard, promotedCard);
         overlay.querySelector('.txb-status').appendChild(compactSettings);
         const countBadge = overlay.querySelector('#txb-count');
@@ -633,39 +732,45 @@
         clearKeywords.id = 'txb-clear-keywords';
         clearKeywords.className = 'txb-clear-keywords';
         clearKeywords.type = 'button';
-        clearKeywords.textContent = '清空';
-        clearKeywords.setAttribute('aria-label', '删除全部屏蔽词');
+        clearKeywords.textContent = t('clear');
+        clearKeywords.setAttribute('aria-label', t('clear_keywords_aria'));
         countBadge.replaceWith(headingActions);
         headingActions.append(countBadge, clearKeywords);
         document.body.appendChild(overlay);
         document.body.style.overflow = 'hidden';
         const $ = (selector) => overlay.querySelector(selector);
-        ui = { overlay, dialog: $('#txb-dialog'), input: $('#txb-input'), message: $('#txb-message'), list: $('#txb-list'), count: $('#txb-count'), clearKeywords: $('#txb-clear-keywords'), toggle: $('#txb-toggle'), enabled: $('#txb-enabled'), total: $('#txb-total'), noticeToggle: $('#txb-notice-toggle'), noticeStatus: $('#txb-notice-status'), userIdToggle: $('#txb-user-id-toggle'), userIdStatus: $('#txb-user-id-status'), promotedToggle: $('#txb-promoted-toggle'), promotedStatus: $('#txb-promoted-status'), fileInput: $('#txb-file-input'), urlButton: $('#txb-url'), urlForm: $('#txb-url-form'), urlInput: $('#txb-url-input'), urlSubmit: $('#txb-url-submit'), preview: $('#txb-preview') };
+        ui = { overlay, dialog: $('#txb-dialog'), input: $('#txb-input'), message: $('#txb-message'), list: $('#txb-list'), count: $('#txb-count'), clearKeywords: $('#txb-clear-keywords'), toggle: $('#txb-toggle'), enabled: $('#txb-enabled'), total: $('#txb-total'), noticeToggle: $('#txb-notice-toggle'), noticeStatus: $('#txb-notice-status'), userIdToggle: $('#txb-user-id-toggle'), userIdStatus: $('#txb-user-id-status'), promotedToggle: $('#txb-promoted-toggle'), promotedStatus: $('#txb-promoted-status'), languageSelect: $('#txb-language'), fileInput: $('#txb-file-input'), urlButton: $('#txb-url'), urlForm: $('#txb-url-form'), urlInput: $('#txb-url-input'), urlSubmit: $('#txb-url-submit'), preview: $('#txb-preview') };
         $('#txb-close').onclick = closeModal;
         overlay.onclick = (event) => { if (event.target === overlay) closeModal(); };
         overlay.onkeydown = dialogKeys;
         $('#txb-add').onsubmit = (event) => { event.preventDefault(); if (addKeyword(ui.input.value)) ui.input.value = ''; };
-        ui.toggle.onclick = () => { state.enabled = !state.enabled; write(KEYS.enabled, state.enabled); updateEnabled(); reapply(); notify(state.enabled ? '帖子过滤已启用。' : '过滤已暂停，帖子已恢复显示。', 'success'); };
+        ui.toggle.onclick = () => { state.enabled = !state.enabled; write(KEYS.enabled, state.enabled); updateEnabled(); reapply(); notify(state.enabled ? t('filtering_enabled') : t('filtering_paused'), 'success'); };
         ui.noticeToggle.onclick = () => {
             state.floatingNotice = !state.floatingNotice;
             write(KEYS.floatingNotice, state.floatingNotice);
             if (!state.floatingNotice) removeFloatingNotice();
             updateFloatingNoticeSetting();
-            notify(state.floatingNotice ? '浮动拦截提示已开启。' : '浮动拦截提示已关闭。', 'success');
+            notify(state.floatingNotice ? t('floating_enabled') : t('floating_disabled'), 'success');
         };
         ui.userIdToggle.onclick = () => {
             state.filterUserId = !state.filterUserId;
             write(KEYS.filterUserId, state.filterUserId);
             updateUserIdFilterSetting();
             reapply();
-            notify(state.filterUserId ? '作者名称与 ID 过滤已开启。' : '作者名称与 ID 过滤已关闭。', 'success');
+            notify(state.filterUserId ? t('author_enabled') : t('author_disabled'), 'success');
         };
         ui.promotedToggle.onclick = () => {
             state.blockPromoted = !state.blockPromoted;
             write(KEYS.blockPromoted, state.blockPromoted);
             updatePromotedSetting();
             reapply();
-            notify(state.blockPromoted ? '广告屏蔽已开启。' : '广告屏蔽已关闭。', 'success');
+            notify(state.blockPromoted ? t('promoted_enabled') : t('promoted_disabled'), 'success');
+        };
+        ui.languageSelect.onchange = () => {
+            state.language = ui.languageSelect.value;
+            write(KEYS.language, state.language);
+            closeModal();
+            showModal();
         };
         $('#txb-reset').onclick = resetCounter;
         ui.clearKeywords.onclick = clearAllKeywords;
@@ -678,7 +783,7 @@
         requestAnimationFrame(() => ui?.input.focus());
     };
 
-    GM_registerMenuCommand('管理屏蔽关键词', showModal);
+    GM_registerMenuCommand(t('menu'), showModal);
     window.addEventListener('keydown', (event) => {
         // macOS 的 Option+Shift+K 可能把 event.key 映射成特殊字符；event.code 始终代表物理 K 键。
         const isKKey = event.code === 'KeyK' || event.key.toLocaleLowerCase() === 'k';
