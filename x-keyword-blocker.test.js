@@ -3,7 +3,9 @@ const assert = require('node:assert/strict');
 
 const {
     findBlockedKeyword,
+    keywordCountKey,
     keyOf,
+    normalizeKeywordCounts,
     normalizeKeywords,
     parseImportText,
     userIdFromHref,
@@ -32,6 +34,14 @@ test('keyword normalization trims and deduplicates case-insensitively', () => {
         ['Crypto', '广告']
     );
     assert.equal(keyOf(' ＣＲＹＰＴＯ '), 'crypto');
+});
+
+test('keyword count helpers normalize keys and reject invalid counts', () => {
+    assert.equal(keywordCountKey(' ＣＲＹＰＴＯ '), 'crypto');
+    assert.deepEqual(
+        normalizeKeywordCounts({ crypto: 3, 广告: 0, bad: -1, missing: 1.5, empty: Number.MAX_SAFE_INTEGER + 1 }),
+        { crypto: 3, 广告: 0 }
+    );
 });
 
 test('TXT import reports blank, duplicate, and invalid lines', () => {

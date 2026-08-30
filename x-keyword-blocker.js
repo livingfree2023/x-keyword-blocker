@@ -2,7 +2,7 @@
 // @name         Twitter / X 关键词屏蔽工具
 // @name:en      X Keyword Blocker
 // @namespace    https://github.com/livingfree2023/x-keyword-blocker
-// @version      1.5.2
+// @version      1.5.3
 // @description  屏蔽指定关键词与推广帖子，支持统计、暂停、TXT 与网址导入导出
 // @description:en Block posts by keyword and promoted-post labels, with stats and TXT/URL import/export
 // @author       livingfree
@@ -41,7 +41,7 @@
             remote_insecure_redirect: '网址重定向到了非 HTTPS 地址，已停止读取。',
             remote_http: '服务器返回 HTTP {status}，无法读取文件。',
             remote_network: '网络请求失败，请检查网址、网络连接或用户脚本的跨域权限。',
-            floating_aria: '累计拦截 {total} 条，本次新增 {delta} 条', floating_label: '累计拦截',
+            floating_aria: '累计拦截 {total} 条，本次新增 {delta} 条，关键词 {keywords}', floating_aria_plain: '累计拦截 {total} 条，本次新增 {delta} 条', floating_label: '累计拦截',
             empty_title: '还没有屏蔽词', empty_description: '添加后会立即重新检查当前时间线。',
             delete: '删除', delete_keyword_aria: '删除关键词 {keyword}', deleted_keyword: '已删除“{keyword}”',
             enter_keyword: '请输入一个关键词。', keyword_too_long: '关键词不能超过 {max} 个字符。',
@@ -57,7 +57,7 @@
             reset_success: '累计拦截数已清零。', clear_none: '当前没有可清空的屏蔽词。',
             clear_confirm: '确认删除全部 {count} 个屏蔽词？此操作无法撤销。', clear_success: '已删除全部 {count} 个屏蔽词。',
             title: '关键词屏蔽', description: '管理时间线过滤规则与导入导出。', close: '关闭',
-            filter_status: '过滤状态', filter_toggle_aria: '启用帖子过滤', total_blocked: '累计拦截', reset: '清零', posts_unit: ' 条',
+            filter_status: '过滤状态', filter_toggle_aria: '启用帖子过滤', total_blocked: '累计拦截', reset: '清零', posts_unit: ' 条', keyword_block_count: '过滤{count}次',
             new_keyword: '新关键词', keyword_placeholder: '输入要屏蔽的关键词…', add: '添加',
             input_hint: '每行一个关键词，匹配时不区分大小写。', import_file: '从文件导入', import_url: '从网址导入', export_txt: '导出 TXT',
             url_label: 'HTTPS 文本网址', preview_aria: '导入预览', blocked_words: '屏蔽词',
@@ -78,7 +78,7 @@
             remote_insecure_redirect: 'The URL redirected to a non-HTTPS address, so it was not loaded.',
             remote_http: 'The server returned HTTP {status}; the file could not be loaded.',
             remote_network: 'The request failed. Check the URL, network connection, or userscript cross-origin permission.',
-            floating_aria: '{total} posts blocked in total; {delta} newly blocked', floating_label: 'Total blocked',
+            floating_aria: '{total} posts blocked in total; {delta} newly blocked; keywords {keywords}', floating_aria_plain: '{total} posts blocked in total; {delta} newly blocked', floating_label: 'Total blocked',
             empty_title: 'No blocked keywords yet', empty_description: 'Add one to recheck the current timeline immediately.',
             delete: 'Delete', delete_keyword_aria: 'Delete keyword {keyword}', deleted_keyword: 'Deleted “{keyword}”',
             enter_keyword: 'Enter a keyword.', keyword_too_long: 'A keyword cannot exceed {max} characters.',
@@ -94,7 +94,7 @@
             reset_success: 'Lifetime block count reset.', clear_none: 'There are no blocked keywords to clear.',
             clear_confirm: 'Delete all {count} blocked keywords? This cannot be undone.', clear_success: 'Deleted all {count} blocked keywords.',
             title: 'Keyword Blocker', description: 'Manage timeline filters and imports.', close: 'Close',
-            filter_status: 'Filtering', filter_toggle_aria: 'Toggle post filtering', total_blocked: 'Total blocked', reset: 'Reset', posts_unit: ' posts',
+            filter_status: 'Filtering', filter_toggle_aria: 'Toggle post filtering', total_blocked: 'Total blocked', reset: 'Reset', posts_unit: ' posts', keyword_block_count: 'blocked {count} times',
             new_keyword: 'New keyword', keyword_placeholder: 'Enter a keyword to block…', add: 'Add',
             input_hint: 'One keyword per line. Matching is case-insensitive.', import_file: 'Import file', import_url: 'Import URL', export_txt: 'Export TXT',
             url_label: 'HTTPS text-file URL', preview_aria: 'Import preview', blocked_words: 'Blocked keywords',
@@ -159,6 +159,17 @@
         }
         return { keywords, blankCount, duplicateCount, invalidCount };
     };
+    const normalizeKeywordCounts = (value) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+        const output = {};
+        for (const [key, count] of Object.entries(value)) {
+            const normalizedKey = keywordCountKey(key);
+            if (!normalizedKey || !Number.isSafeInteger(count) || count < 0) continue;
+            output[normalizedKey] = (output[normalizedKey] || 0) + count;
+        }
+        return output;
+    };
+    const keywordCountKey = (keyword) => keyOf(keyword);
     const userIdFromHref = (href) => {
         if (typeof href !== 'string') return '';
         const match = href.match(/^\/([^/?#]+)\/?$/);
@@ -210,6 +221,8 @@
             keyOf,
             normalizeKeywords,
             parseImportText,
+            normalizeKeywordCounts,
+            keywordCountKey,
             userIdFromHref,
             buildAuthorSearchText,
             isPromotedLabelText,
@@ -243,11 +256,13 @@
         filterUserId: read(KEYS.filterUserId, false) === true,
         floatingNotice: read(KEYS.floatingNotice, true) !== false,
         total: Number.isSafeInteger(stats?.total) && stats.total >= 0 ? stats.total : 0,
+        keywordCounts: normalizeKeywordCounts(stats?.keywordCounts),
         sessionPostIds: new Set(),
         sessionArticles: new WeakSet(),
         revision: 0,
         statsTimer: null,
         floatingDelta: 0,
+        floatingKeywords: new Set(),
         floatingBatchTimer: null,
         floatingHideTimer: null
     };
@@ -265,7 +280,7 @@
     const saveStats = () => {
         if (state.statsTimer !== null) clearTimeout(state.statsTimer);
         state.statsTimer = null;
-        write(KEYS.stats, { total: state.total });
+        write(KEYS.stats, { total: state.total, keywordCounts: state.keywordCounts });
     };
     const scheduleStatsSave = () => {
         if (state.statsTimer === null) state.statsTimer = window.setTimeout(saveStats, 500);
@@ -279,10 +294,17 @@
         }
         return null;
     };
+    const updateKeywordStats = () => {
+        if (!ui) return;
+        ui.list.querySelectorAll('.txb-keyword-meta[data-count-key]').forEach((item) => {
+            item.textContent = t('keyword_block_count', { count: formatNumber(state.keywordCounts[item.dataset.countKey] || 0) });
+        });
+    };
     const updateStats = () => {
         if (ui) ui.total.textContent = formatNumber(state.total);
+        updateKeywordStats();
     };
-    const countPost = (article) => {
+    const countPost = (article, keyword) => {
         const id = postId(article);
         if (id) {
             if (state.sessionPostIds.has(id)) return;
@@ -292,9 +314,11 @@
             state.sessionArticles.add(article);
         }
         state.total += 1;
+        const countKey = keywordCountKey(keyword);
+        if (countKey) state.keywordCounts[countKey] = (state.keywordCounts[countKey] || 0) + 1;
         updateStats();
         scheduleStatsSave();
-        scheduleFloatingNotice(1);
+        scheduleFloatingNotice(1, keyword);
     };
     const containerOf = (article) => article.closest('div[data-testid="cellInnerDiv"]') || article;
     const tweetText = (article) => Array.from(article.querySelectorAll('div[data-testid="tweetText"]'))
@@ -355,7 +379,7 @@
         container.dataset.txbHidden = 'true';
         container.dataset.txbKeyword = match;
         container.style.setProperty('display', 'none', 'important');
-        countPost(article);
+        countPost(article, match === promotedLabel ? '' : match);
     };
     const pending = new Set();
     let frame = null;
@@ -400,7 +424,7 @@
         style.textContent += `
 #txb-floating-counter{--txb-float-bg:rgba(255,255,255,.96);--txb-float-text:#0f1419;--txb-float-muted:#536471;position:fixed;left:50%;bottom:32px;z-index:2147483645;display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid rgba(15,20,25,.12);border-radius:999px;color:var(--txb-float-text);background:var(--txb-float-bg);box-shadow:0 8px 28px rgba(0,0,0,.22);pointer-events:none;font-family:TwitterChirp,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:txbFloatNotice 2s cubic-bezier(.2,.8,.2,1) both;backdrop-filter:blur(10px)}#txb-floating-counter[data-theme=dark]{--txb-float-bg:rgba(21,32,43,.96);--txb-float-text:#f7f9f9;--txb-float-muted:#8b98a5;border-color:rgba(255,255,255,.14)}.txb-floating-label{color:var(--txb-float-muted);font-size:12px;font-weight:650}.txb-floating-total{font-size:16px;font-weight:800}.txb-floating-delta{padding:3px 8px;border-radius:999px;color:#007a51;background:rgba(0,186,124,.14);font-size:13px;font-weight:850}@keyframes txbFloatNotice{0%{opacity:0;transform:translate(-50%,12px) scale(.96)}14%,78%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-7px) scale(.98)}}.txb-card-wide{grid-column:1/-1;min-height:60px}.txb-compact-settings{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.txb-compact-settings .txb-card{min-width:0;min-height:66px;padding:10px}.txb-compact-settings .txb-value{font-size:15px}.txb-heading-actions{display:flex;align-items:center;gap:6px}.txb-clear-keywords{padding:2px 7px;border:0;border-radius:99px;color:var(--danger);background:transparent;font:inherit;font-size:11px;font-weight:700;cursor:pointer}.txb-clear-keywords:hover{background:rgba(244,33,46,.1)}@media(max-width:520px){#txb-floating-counter{bottom:82px;max-width:calc(100vw - 24px)}.txb-compact-settings{gap:8px}.txb-compact-settings .txb-card{padding:9px}}@media(prefers-reduced-motion:reduce){#txb-floating-counter{animation:none}}
         `;
-        style.textContent += `.txb-select{min-width:142px;height:34px;padding:0 28px 0 10px;border:1px solid var(--border);border-radius:10px;outline:0;color:var(--text);background:var(--bg);font:inherit;font-size:13px;cursor:pointer}.txb-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--focus)}`;
+        style.textContent += `.txb-select{min-width:142px;height:34px;padding:0 28px 0 10px;border:1px solid var(--border);border-radius:10px;outline:0;color:var(--text);background:var(--bg);font:inherit;font-size:13px;cursor:pointer}.txb-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--focus)}.txb-keyword-meta{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}.txb-floating-keywords{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txb-float-muted);font-size:13px;font-weight:650}`;
         document.head.appendChild(style);
     };
     const darkPage = () => {
@@ -419,6 +443,7 @@
         state.floatingBatchTimer = null;
         state.floatingHideTimer = null;
         state.floatingDelta = 0;
+        state.floatingKeywords.clear();
         document.getElementById('txb-floating-counter')?.remove();
     };
     const showFloatingNotice = () => {
@@ -428,7 +453,10 @@
         injectStyles();
         const previous = document.getElementById('txb-floating-counter');
         const delta = state.floatingDelta + Number(previous?.dataset.delta || 0);
+        const keywords = new Set([...String(previous?.dataset.keywords || '').split('\n'), ...state.floatingKeywords].filter(Boolean));
+        const keywordText = [...keywords].join(' ');
         state.floatingDelta = 0;
+        state.floatingKeywords.clear();
         previous?.remove();
         if (state.floatingHideTimer !== null) clearTimeout(state.floatingHideTimer);
 
@@ -436,9 +464,10 @@
         counter.id = 'txb-floating-counter';
         counter.dataset.theme = darkPage() ? 'dark' : 'light';
         counter.dataset.delta = String(delta);
+        counter.dataset.keywords = [...keywords].join('\n');
         counter.setAttribute('role', 'status');
         counter.setAttribute('aria-live', 'polite');
-        counter.setAttribute('aria-label', t('floating_aria', { total: formatNumber(state.total), delta: formatNumber(delta) }));
+        counter.setAttribute('aria-label', t(keywordText ? 'floating_aria' : 'floating_aria_plain', { total: formatNumber(state.total), delta: formatNumber(delta), keywords: keywordText }));
 
         const label = document.createElement('span');
         label.className = 'txb-floating-label';
@@ -450,6 +479,12 @@
         change.className = 'txb-floating-delta';
         change.textContent = `+${formatNumber(delta)}`;
         counter.append(label, total, change);
+        if (keywordText) {
+            const keywordList = document.createElement('span');
+            keywordList.className = 'txb-floating-keywords';
+            keywordList.textContent = `(${keywordText})`;
+            counter.appendChild(keywordList);
+        }
         document.body.appendChild(counter);
 
         state.floatingHideTimer = window.setTimeout(() => {
@@ -457,9 +492,10 @@
             state.floatingHideTimer = null;
         }, 2000);
     };
-    const scheduleFloatingNotice = (delta) => {
+    const scheduleFloatingNotice = (delta, keyword) => {
         if (!state.floatingNotice) return;
         state.floatingDelta += delta;
+        if (keyword) state.floatingKeywords.add(keyword);
         if (state.floatingBatchTimer !== null) clearTimeout(state.floatingBatchTimer);
         state.floatingBatchTimer = window.setTimeout(showFloatingNotice, 120);
     };
@@ -495,12 +531,19 @@
             ui.list.appendChild(empty);
             return;
         }
-        for (const keyword of state.keywords) {
+        const sortedKeywords = state.keywords
+            .map((keyword, index) => ({ keyword, index, count: state.keywordCounts[keywordCountKey(keyword)] || 0 }))
+            .sort((left, right) => right.count - left.count || left.index - right.index);
+        for (const { keyword } of sortedKeywords) {
             const row = document.createElement('div');
             row.className = 'txb-item';
             const word = document.createElement('span');
             word.className = 'txb-word';
             word.textContent = keyword;
+            const meta = document.createElement('span');
+            meta.className = 'txb-keyword-meta';
+            meta.dataset.countKey = keywordCountKey(keyword);
+            meta.textContent = t('keyword_block_count', { count: formatNumber(state.keywordCounts[meta.dataset.countKey] || 0) });
             const remove = document.createElement('button');
             remove.type = 'button';
             remove.className = 'txb-remove';
@@ -513,7 +556,7 @@
                 reapply();
                 notify(t('deleted_keyword', { keyword }), 'success');
             };
-            row.append(word, remove);
+            row.append(word, meta, remove);
             ui.list.appendChild(row);
         }
     };
@@ -670,7 +713,8 @@
     const resetCounter = () => {
         if (!confirm(t('reset_confirm'))) return;
         state.total = 0;
-        saveStats(); updateStats(); notify(t('reset_success'), 'success');
+        state.keywordCounts = {};
+        saveStats(); updateStats(); renderList(); notify(t('reset_success'), 'success');
     };
     const clearAllKeywords = () => {
         const count = state.keywords.length;
