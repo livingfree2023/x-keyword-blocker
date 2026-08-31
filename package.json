@@ -1,6 +1,6 @@
 {
   "name": "x-keyword-blocker",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "private": true,
   "scripts": {
     "check": "node --check x-keyword-blocker.js",
