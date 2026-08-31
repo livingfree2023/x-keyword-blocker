@@ -46,7 +46,7 @@
             delete: '删除', delete_keyword_aria: '删除关键词 {keyword}', deleted_keyword: '已删除“{keyword}”',
             enter_keyword: '请输入一个关键词。', keyword_too_long: '关键词不能超过 {max} 个字符。',
             keyword_limit: '最多保存 {max} 个关键词。', keyword_exists: '“{keyword}”已经在列表中。',
-            added_keyword: '已添加“{keyword}”', no_export: '当前没有可导出的关键词。',
+            added_keyword: '已添加“{keyword}”', added_keywords: '已添加 {count} 个关键词', no_export: '当前没有可导出的关键词。',
             exported: '已导出 {count} 个关键词。', imported: '导入完成，当前共有 {count} 个关键词。',
             no_valid_import: '没有找到可导入的有效关键词。', import_preview: '检查导入内容 · {source}',
             import_summary: '识别到 {count} 个，其中 {newCount} 个尚未存在；忽略 {blankCount} 个空行、{duplicateCount} 个重复项、{invalidCount} 个无效项。',
@@ -83,7 +83,7 @@
             delete: 'Delete', delete_keyword_aria: 'Delete keyword {keyword}', deleted_keyword: 'Deleted “{keyword}”',
             enter_keyword: 'Enter a keyword.', keyword_too_long: 'A keyword cannot exceed {max} characters.',
             keyword_limit: 'You can save up to {max} keywords.', keyword_exists: '“{keyword}” is already in the list.',
-            added_keyword: 'Added “{keyword}”', no_export: 'There are no keywords to export.',
+            added_keyword: 'Added “{keyword}”', added_keywords: 'Added {count} keywords', no_export: 'There are no keywords to export.',
             exported: 'Exported {count} keywords.', imported: 'Import complete. There are now {count} keywords.',
             no_valid_import: 'No valid keywords were found to import.', import_preview: 'Review import · {source}',
             import_summary: '{count} found; {newCount} are new. Ignored {blankCount} blank, {duplicateCount} duplicate, and {invalidCount} invalid entries.',
@@ -159,6 +159,7 @@
         }
         return { keywords, blankCount, duplicateCount, invalidCount };
     };
+    const splitKeywordInput = (value) => String(value).split(/\r?\n/).map(clean).filter(Boolean);
     const normalizeKeywordCounts = (value) => {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
         const output = {};
@@ -220,6 +221,7 @@
             findBlockedKeyword,
             keyOf,
             normalizeKeywords,
+            splitKeywordInput,
             parseImportText,
             normalizeKeywordCounts,
             keywordCountKey,
@@ -424,7 +426,7 @@
         style.textContent += `
 #txb-floating-counter{--txb-float-bg:rgba(255,255,255,.96);--txb-float-text:#0f1419;--txb-float-muted:#536471;position:fixed;left:50%;bottom:32px;z-index:2147483645;display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid rgba(15,20,25,.12);border-radius:999px;color:var(--txb-float-text);background:var(--txb-float-bg);box-shadow:0 8px 28px rgba(0,0,0,.22);pointer-events:none;font-family:TwitterChirp,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;animation:txbFloatNotice 2s cubic-bezier(.2,.8,.2,1) both;backdrop-filter:blur(10px)}#txb-floating-counter[data-theme=dark]{--txb-float-bg:rgba(21,32,43,.96);--txb-float-text:#f7f9f9;--txb-float-muted:#8b98a5;border-color:rgba(255,255,255,.14)}.txb-floating-label{color:var(--txb-float-muted);font-size:12px;font-weight:650}.txb-floating-total{font-size:16px;font-weight:800}.txb-floating-delta{padding:3px 8px;border-radius:999px;color:#007a51;background:rgba(0,186,124,.14);font-size:13px;font-weight:850}@keyframes txbFloatNotice{0%{opacity:0;transform:translate(-50%,12px) scale(.96)}14%,78%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-7px) scale(.98)}}.txb-card-wide{grid-column:1/-1;min-height:60px}.txb-compact-settings{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.txb-compact-settings .txb-card{min-width:0;min-height:66px;padding:10px}.txb-compact-settings .txb-value{font-size:15px}.txb-heading-actions{display:flex;align-items:center;gap:6px}.txb-clear-keywords{padding:2px 7px;border:0;border-radius:99px;color:var(--danger);background:transparent;font:inherit;font-size:11px;font-weight:700;cursor:pointer}.txb-clear-keywords:hover{background:rgba(244,33,46,.1)}@media(max-width:520px){#txb-floating-counter{bottom:82px;max-width:calc(100vw - 24px)}.txb-compact-settings{gap:8px}.txb-compact-settings .txb-card{padding:9px}}@media(prefers-reduced-motion:reduce){#txb-floating-counter{animation:none}}
         `;
-        style.textContent += `.txb-select{min-width:142px;height:34px;padding:0 28px 0 10px;border:1px solid var(--border);border-radius:10px;outline:0;color:var(--text);background:var(--bg);font:inherit;font-size:13px;cursor:pointer}.txb-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--focus)}.txb-keyword-meta{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}.txb-floating-keywords{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txb-float-muted);font-size:13px;font-weight:650}`;
+        style.textContent += `.txb-select{min-width:142px;height:34px;padding:0 28px 0 10px;border:1px solid var(--border);border-radius:10px;outline:0;color:var(--text);background:var(--bg);font:inherit;font-size:13px;cursor:pointer}.txb-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--focus)}.txb-keyword-meta{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}.txb-floating-keywords{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txb-float-muted);font-size:13px;font-weight:650}#txb-input{min-height:76px;max-height:170px;height:auto;padding:9px 14px 10px;line-height:1.45;resize:vertical}`;
         document.head.appendChild(style);
     };
     const darkPage = () => {
@@ -560,19 +562,26 @@
             ui.list.appendChild(row);
         }
     };
-    const addKeyword = (value) => {
-        const keyword = clean(value);
-        if (!keyword) return notify(t('enter_keyword'), 'error'), false;
-        if (keyword.length > MAX_LENGTH) return notify(t('keyword_too_long', { max: MAX_LENGTH }), 'error'), false;
-        if (state.keywords.length >= MAX_KEYWORDS) return notify(t('keyword_limit', { max: formatNumber(MAX_KEYWORDS) }), 'error'), false;
-        if (state.keywords.some((item) => keyOf(item) === keyOf(keyword))) {
-            return notify(t('keyword_exists', { keyword }), 'error'), false;
+    const addKeywords = (value) => {
+        const keywords = splitKeywordInput(value);
+        if (!keywords.length) return notify(t('enter_keyword'), 'error'), false;
+        if (keywords.some((keyword) => keyword.length > MAX_LENGTH)) {
+            return notify(t('keyword_too_long', { max: MAX_LENGTH }), 'error'), false;
         }
-        state.keywords.push(keyword);
+        const existing = new Set(state.keywords.map(keyOf));
+        const additions = keywords.filter((keyword) => !existing.has(keyOf(keyword)));
+        if (state.keywords.length + additions.length > MAX_KEYWORDS) {
+            return notify(t('keyword_limit', { max: formatNumber(MAX_KEYWORDS) }), 'error'), false;
+        }
+        if (!additions.length) return notify(t('keyword_exists', { keyword: keywords[0] }), 'error'), false;
+        additions.forEach((keyword) => {
+            state.keywords.push(keyword);
+            existing.add(keyOf(keyword));
+        });
         saveKeywords();
         renderList();
         reapply();
-        notify(t('added_keyword', { keyword }), 'success');
+        notify(additions.length === 1 ? t('added_keyword', { keyword: additions[0] }) : t('added_keywords', { count: formatNumber(additions.length) }), 'success');
         return true;
     };
     const exportTxt = () => {
@@ -735,7 +744,7 @@
     const dialogKeys = (event) => {
         if (event.key === 'Escape') return event.preventDefault(), closeModal();
         if (event.key !== 'Tab') return;
-        const items = [...ui.dialog.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled])')]
+        const items = [...ui.dialog.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled])')]
             .filter((item) => !item.closest('[hidden]'));
         const first = items[0], last = items.at(-1);
         if (event.shiftKey && document.activeElement === first) event.preventDefault(), last.focus();
@@ -749,7 +758,7 @@
         const overlay = document.createElement('div');
         overlay.id = 'txb-overlay';
         overlay.dataset.theme = darkPage() ? 'dark' : 'light';
-        overlay.innerHTML = `<section id="txb-dialog" role="dialog" aria-modal="true" aria-labelledby="txb-title" aria-describedby="txb-description"><header class="txb-header"><div><p class="txb-eyebrow">X Keyword Blocker</p><h1 id="txb-title">${t('title')}</h1><p id="txb-description" class="txb-subtitle">${t('description')}</p></div><button id="txb-close" class="txb-icon" type="button" aria-label="${t('close')}">×</button></header><div class="txb-content"><div class="txb-status"><div class="txb-card"><div><span class="txb-label">${t('filter_status')}</span><strong id="txb-enabled" class="txb-value"></strong></div><button id="txb-toggle" class="txb-switch" type="button" role="switch" aria-label="${t('filter_toggle_aria')}"></button></div><div class="txb-card"><div><span class="txb-label">${t('total_blocked')}</span><strong class="txb-value"><span id="txb-total">0</span>${t('posts_unit')}</strong></div><button id="txb-reset" type="button">${t('reset')}</button></div></div><form id="txb-add" class="txb-form"><label class="txb-sr" for="txb-input">${t('new_keyword')}</label><input id="txb-input" class="txb-input" maxlength="${MAX_LENGTH}" autocomplete="off" placeholder="${t('keyword_placeholder')}"><button class="txb-primary" type="submit">${t('add')}</button></form><p id="txb-message" role="status" aria-live="polite">${t('input_hint')}</p><div class="txb-tools"><button id="txb-file" class="txb-secondary" type="button">${t('import_file')}</button><button id="txb-url" class="txb-secondary" type="button" aria-expanded="false">${t('import_url')}</button><button id="txb-export" class="txb-secondary" type="button">${t('export_txt')}</button><input id="txb-file-input" class="txb-sr" type="file" accept=".txt,text/plain"></div><form id="txb-url-form" hidden><label class="txb-sr" for="txb-url-input">${t('url_label')}</label><input id="txb-url-input" class="txb-input" type="url" placeholder="https://example.com/keywords.txt"><button id="txb-url-submit" class="txb-primary">${t('read')}</button></form><section id="txb-preview" class="txb-preview" aria-label="${t('preview_aria')}" hidden></section><div class="txb-heading"><h2>${t('blocked_words')}</h2><span id="txb-count" class="txb-count">0</span></div><div id="txb-list" class="txb-list"></div></div><footer class="txb-footer">${t('shortcut_footer')}</footer></section>`;
+        overlay.innerHTML = `<section id="txb-dialog" role="dialog" aria-modal="true" aria-labelledby="txb-title" aria-describedby="txb-description"><header class="txb-header"><div><p class="txb-eyebrow">X Keyword Blocker</p><h1 id="txb-title">${t('title')}</h1><p id="txb-description" class="txb-subtitle">${t('description')}</p></div><button id="txb-close" class="txb-icon" type="button" aria-label="${t('close')}">×</button></header><div class="txb-content"><div class="txb-status"><div class="txb-card"><div><span class="txb-label">${t('filter_status')}</span><strong id="txb-enabled" class="txb-value"></strong></div><button id="txb-toggle" class="txb-switch" type="button" role="switch" aria-label="${t('filter_toggle_aria')}"></button></div><div class="txb-card"><div><span class="txb-label">${t('total_blocked')}</span><strong class="txb-value"><span id="txb-total">0</span>${t('posts_unit')}</strong></div><button id="txb-reset" type="button">${t('reset')}</button></div></div><form id="txb-add" class="txb-form"><label class="txb-sr" for="txb-input">${t('new_keyword')}</label><textarea id="txb-input" class="txb-input" rows="2" placeholder="${t('keyword_placeholder')}"></textarea><button class="txb-primary" type="submit">${t('add')}</button></form><p id="txb-message" role="status" aria-live="polite">${t('input_hint')}</p><div class="txb-tools"><button id="txb-file" class="txb-secondary" type="button">${t('import_file')}</button><button id="txb-url" class="txb-secondary" type="button" aria-expanded="false">${t('import_url')}</button><button id="txb-export" class="txb-secondary" type="button">${t('export_txt')}</button><input id="txb-file-input" class="txb-sr" type="file" accept=".txt,text/plain"></div><form id="txb-url-form" hidden><label class="txb-sr" for="txb-url-input">${t('url_label')}</label><input id="txb-url-input" class="txb-input" type="url" placeholder="https://example.com/keywords.txt"><button id="txb-url-submit" class="txb-primary">${t('read')}</button></form><section id="txb-preview" class="txb-preview" aria-label="${t('preview_aria')}" hidden></section><div class="txb-heading"><h2>${t('blocked_words')}</h2><span id="txb-count" class="txb-count">0</span></div><div id="txb-list" class="txb-list"></div></div><footer class="txb-footer">${t('shortcut_footer')}</footer></section>`;
         const noticeCard = document.createElement('div');
         noticeCard.className = 'txb-card txb-card-wide';
         noticeCard.innerHTML = `<div><span class="txb-label">${t('floating_notice')}</span><strong id="txb-notice-status" class="txb-value"></strong></div><button id="txb-notice-toggle" class="txb-switch" type="button" role="switch" aria-label="${t('floating_toggle_aria')}"></button>`;
@@ -787,7 +796,12 @@
         $('#txb-close').onclick = closeModal;
         overlay.onclick = (event) => { if (event.target === overlay) closeModal(); };
         overlay.onkeydown = dialogKeys;
-        $('#txb-add').onsubmit = (event) => { event.preventDefault(); if (addKeyword(ui.input.value)) ui.input.value = ''; };
+        $('#txb-add').onsubmit = (event) => { event.preventDefault(); if (addKeywords(ui.input.value)) ui.input.value = ''; };
+        ui.input.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' || !(event.metaKey || event.ctrlKey)) return;
+            event.preventDefault();
+            ui.input.form?.requestSubmit();
+        });
         ui.toggle.onclick = () => { state.enabled = !state.enabled; write(KEYS.enabled, state.enabled); updateEnabled(); reapply(); notify(state.enabled ? t('filtering_enabled') : t('filtering_paused'), 'success'); };
         ui.noticeToggle.onclick = () => {
             state.floatingNotice = !state.floatingNotice;

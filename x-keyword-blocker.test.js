@@ -7,6 +7,7 @@ const {
     keyOf,
     normalizeKeywordCounts,
     normalizeKeywords,
+    splitKeywordInput,
     parseImportText,
     userIdFromHref,
     buildAuthorSearchText,
@@ -42,6 +43,15 @@ test('keyword count helpers normalize keys and reject invalid counts', () => {
         normalizeKeywordCounts({ crypto: 3, 广告: 0, bad: -1, missing: 1.5, empty: Number.MAX_SAFE_INTEGER + 1 }),
         { crypto: 3, 广告: 0 }
     );
+});
+
+test('keyword input splits lines and ignores blank lines', () => {
+    assert.deepEqual(
+        splitKeywordInput('crypto\r\n广告\n\nAirDrop  \n\n'),
+        ['crypto', '广告', 'AirDrop']
+    );
+    assert.deepEqual(splitKeywordInput('   '), []);
+    assert.deepEqual(splitKeywordInput(''), []);
 });
 
 test('TXT import reports blank, duplicate, and invalid lines', () => {
