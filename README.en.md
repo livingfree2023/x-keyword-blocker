@@ -7,6 +7,7 @@ A lightweight, dependency-free Tampermonkey / Violentmonkey userscript that hide
 ## Features
 
 - Case-insensitive keyword matching with Unicode normalization, plus optional **whole-word matching** (exact ASCII word-boundary matching to prevent false positives on compounds; CJK remains substring matching)
+- **Regular expression matching**: supports `/pattern/flags` syntax (e.g. `/(wechat|tg)[\s:：]*\w+/i`) with real-time syntax validation and purple "RegEx" badges
 - Flexible **filter scope**: choose between "All pages" or "Home timeline only" (allows posts on user profiles, search, or permalink pages without false hits)
 - Optional matching against author display names and `@usernames`
 - Independent blocking of "Ad / Promoted / Sponsored" posts across multiple languages without relying on keywords
@@ -38,6 +39,16 @@ Open “管理屏蔽关键词” (“Manage blocked keywords”) from your users
 Use the userscript menu if the browser or input method intercepts the shortcut.
 
 Use the Language setting in the panel to select Auto, 中文, or English. The panel reopens immediately after a change.
+
+### Matching Rules & Regular Expressions
+
+- **Plain keywords**: Case-insensitive by default with Unicode normalization (NFKC).
+- **Whole-word matching (optional)**: When enabled, ASCII keywords match only whole words (e.g. `cat` will not match `caterpillar`), while CJK languages retain natural substring matching.
+- **Regular expression rules**: Enter expressions wrapped in slashes with optional flags, such as `/pattern/flags` (e.g. `/(vx|wechat|tg|t\.me)[\s:：]*\w+/i` or `/[0-9]{6}/`):
+  - Automatically parses pattern and flags (supports `i`, `m`, `s`, `u`, `v`);
+  - Tagged with a distinct purple "RegEx" badge in the keyword list;
+  - Real-time syntax validation blocks invalid regex input with helpful error messages;
+  - Deeply inspects post text, including emoji `alt` attributes.
 
 ### Settings
 
