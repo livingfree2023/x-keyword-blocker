@@ -11,6 +11,7 @@ Useful commands:
 
 - `npm run check` — syntax-check the userscript.
 - `npm test` — run the unit tests.
+- `npm run meta` — regenerate `x-keyword-blocker.meta.js` metadata header.
 
 ## Before committing or pushing
 
@@ -18,7 +19,8 @@ Useful commands:
    - Run `git status` and `git diff`; confirm only intended files are staged.
    - Stage files explicitly. Never commit secrets, `.DS_Store`, build output, or unrelated files.
 2. **Bump the version** (unless the task does not release a change):
-   - Keep both in sync: `package.json` → `"version"` and `x-keyword-blocker.js` → `// @version`.
+   - Keep in sync: `package.json` → `"version"`, `x-keyword-blocker.js` → `// @version`.
+   - Run `npm run meta` to update `x-keyword-blocker.meta.js`.
    - Use a patch bump (`x.y.z` → `x.y.z+1`) for fixes and small additions by default.
 3. **Verify before committing:** `npm run check` and `npm test` must both pass.
 4. **Commit only when asked,** with a short, imperative message matching repo history (e.g. `Add keyword hit stats`).
